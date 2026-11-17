@@ -1,7 +1,7 @@
 /* Hábitos · hábitos con meta, pendientes, calendario (Google Calendar) y avisos dentro de la app. Los datos van a tu hoja «Fergard · Hábitos». */
 (function () {
   "use strict";
-  var CFG = window.FG_CFG || {}, VERSION = "0.5.1", DB_KEY = "habitos_db", H = window.HCore;
+  var CFG = window.FG_CFG || {}, VERSION = "0.5.2", DB_KEY = "habitos_db", H = window.HCore;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var LS = (function () { try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); return localStorage; } catch (e) { var m = {}; return { getItem: function (k) { return m[k] || null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } }; } })();
@@ -51,7 +51,7 @@
     }).catch(function () { S.sync = "Sin conexión · se subirá después"; if (manual) toast("Sin conexión"); }).then(function () { syncing = false; pintarNube(); });
   }
   window.addEventListener("online", function () { sync(false); });
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) { sync(false); S.dia = S.dia || H.hoy(); syncGym(); tickEnf(); revisar(); } });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { sync(false); S.dia = S.dia || H.hoy(); syncGym(); tickEnf(); revisar(); buscarActualizacion(); } });
 
   function toast(t) { var e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(function () { e.classList.remove("on"); }, 2600); }
   function ico(n) {
@@ -392,6 +392,14 @@
     try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {}
     pintar(); if (completo || min >= 1) mostrarAviso({ k: "enf|" + Date.now(), tipo: "enf", tit: completo ? "¡Bloque de enfoque listo!" : "Enfoque terminado", sub: (sub || min + " min de enfoque") + " · ¿descansas 5 minutos?", hab: o.hab });
   }
+/* ---- actualización automática: avisa cuando hay una versión nueva y la instala con un toque ---- */
+  function buscarActualizacion() {
+    if (S.upd || !window.fetch) return;
+    fetch("habitos.js?nc=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.text(); }).then(function (t) {
+      var m = /VERSION = "([^"]+)"/.exec(t); if (!m || m[1] === VERSION) return; S.upd = m[1];
+      var b = document.createElement("button"); b.id = "upd"; b.setAttribute("data-a", "actualizar"); b.innerHTML = "<b>Hay una versión nueva (" + esc(m[1]) + ")</b><span>Toca para actualizar</span>"; document.body.appendChild(b);
+    }).catch(function () {});
+  }
   var TABS = [["hoy", "Hoy"], ["pend", "Pendientes"], ["cal", "Calendario"], ["hab", "Hábitos"], ["prog", "Progreso"]];
   function pintarTabs() { $("#tabs").innerHTML = TABS.map(function (t) { return '<button class="' + (S.tab === t[0] ? "on" : "") + '" data-a="tab" data-t="' + t[0] + '" aria-current="' + (S.tab === t[0]) + '">' + ico(t[0]) + t[1] + "</button>"; }).join(""); }
   function pintar() {
@@ -627,6 +635,11 @@
     "cl-man": function () { var c = pendCierre(), m = H.addD(H.hoy(), 1), mov = c.ts.filter(function (t) { return nivel(t) !== 1; }), sio = c.ts.length - mov.length; mov.forEach(function (t) { t.f = m; touch("tarea", t.id, t); }); cierre(); pintar(); toast(mov.length + " pasaron a mañana" + (sio ? " · " + sio + " «sí o sí» siguen hoy" : "")); },
     "cl-p": function (el) { var t = db.tareas[el.dataset.id]; if (t) { t.f = H.addD(H.hoy(), 1); touch("tarea", t.id, t); } cierre(); pintar(); toast("Pasó a mañana"); }
   });
+  Object.assign(A, { actualizar: function () {
+    var fin = function () { location.reload(); };
+    Promise.resolve().then(function () { return window.caches ? caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }) : null; })
+      .then(function () { return navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }) : null; }).then(fin, fin);
+  } });
   document.addEventListener("click", function (e) { var el = e.target.closest("[data-a]"); if (!el) return; var f = A[el.dataset.a]; if (!f) return; if (el.type !== "checkbox") e.preventDefault(); e.stopPropagation(); f(el); });
   document.addEventListener("keydown", function (e) {
     if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches('[role="button"][data-a]')) { e.preventDefault(); e.target.click(); }
@@ -659,7 +672,7 @@
     var vacio = !db.sync.ult && !Object.keys(db.habitos).length && !Object.keys(db.tareas).length; if (vacio && cfg().token) S.cargando = true;
     pintarTabs(); pintar();
     window.HB_DEBUG = { db: function () { return db; }, S: S, A: A, pintar: pintar, revisar: revisar, setEv: function (e) { S.ev = e; pintar(); } };
-    sync(false).then(function () { S.cargando = false; pintar(); cargarEv(H.hoy(), H.addD(H.hoy(), 1)); syncGym(); revisar(); });
+    sync(false).then(function () { S.cargando = false; pintar(); cargarEv(H.hoy(), H.addD(H.hoy(), 1)); syncGym(); revisar(); buscarActualizacion(); });
     S.enf = enfLeer(); chipEnf(); setInterval(tickEnf, 1000);
     setInterval(function () { if (!document.hidden) { var h = H.hoy(); if (S.lastDay && S.lastDay !== h) { S.dia = h; pintar(); } S.lastDay = h; revisar(); } }, 30000); S.lastDay = H.hoy();
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});

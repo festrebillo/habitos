@@ -1,7 +1,7 @@
 /* Hábitos · hábitos con meta, pendientes, calendario (Google Calendar) y avisos dentro de la app. Los datos van a tu hoja «Fergard · Hábitos». */
 (function () {
   "use strict";
-  var CFG = window.FG_CFG || {}, VERSION = "0.1.1", DB_KEY = "habitos_db", H = window.HCore;
+  var CFG = window.FG_CFG || {}, VERSION = "0.2.0", DB_KEY = "habitos_db", H = window.HCore;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var LS = (function () { try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); return localStorage; } catch (e) { var m = {}; return { getItem: function (k) { return m[k] || null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } }; } })();
@@ -10,13 +10,13 @@
   function p2(n) { return (n < 10 ? "0" : "") + n; }
 
   /* ---------- datos locales y nube ---------- */
-  function vacia() { return { v: 1, habitos: {}, registros: {}, tareas: {}, ajustes: { rec: true }, pend: {}, sync: { ult: 0 } }; }
+  function vacia() { return { v: 1, habitos: {}, registros: {}, tareas: {}, metas: {}, diario: {}, ajustes: { rec: true }, pend: {}, sync: { ult: 0 } }; }
   function cargar() { var d; try { d = JSON.parse(LS.getItem(DB_KEY)); } catch (e) { d = null; } if (!d || typeof d !== "object") d = vacia(); var b = vacia(); Object.keys(b).forEach(function (k) { if (d[k] === undefined) d[k] = b[k]; }); return d; }
   var db = cargar();
-  var S = { tab: "hoy", cal: "sem", dia: H.hoy(), lista: "", ev: [], evR: {}, evErr: "", cargando: false, sync: "", hd: null, qa: null, snooze: {} };
+  var S = { tab: "hoy", pv: "fecha", hv: "hab", cal: "sem", dia: H.hoy(), lista: "", ev: [], evR: {}, evErr: "", cargando: false, sync: "", hd: null, qa: null, snooze: {} };
   function save() { try { LS.setItem(DB_KEY, JSON.stringify(db)); } catch (e) {} }
   function touch(t, id, o) { if (o) o.upd = Date.now(); db.pend[t + ":" + id] = Date.now(); save(); schedSync(); }
-  function mapa(t) { return t === "habito" ? db.habitos : t === "registro" ? db.registros : t === "tarea" ? db.tareas : null; }
+  function mapa(t) { return t === "habito" ? db.habitos : t === "registro" ? db.registros : t === "tarea" ? db.tareas : t === "meta" ? db.metas : t === "diario" ? db.diario : null; }
   function quitar(t, id) { var m = mapa(t); delete m[id]; db.pend[t + ":" + id] = Date.now(); save(); schedSync(); }
   function cfg() { return window.FergardAcceso ? FergardAcceso.config() : { token: null, url: null }; }
   function post(url, body) { return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
@@ -44,9 +44,10 @@
     var env = docsPend(), claves = Object.keys(db.pend), t0 = Date.now();
     return post(c.url, { op: "habitos_sync", app: "habitos", token: c.token, since: db.sync.ult || 0, docs: env }).then(function (r) {
       if (!r || !r.ok) { S.sync = r && r.error === "operacion_desconocida" ? "El script no tiene la versión con Hábitos (actualízalo)" : "Pendiente (" + ((r && r.error) || "error") + ")"; if (manual) toast(S.sync); return; }
-      claves.forEach(function (k) { if (db.pend[k] <= t0) delete db.pend[k]; });
+      var entiende = r.tipos || ["habito", "registro", "tarea", "ajustes"], sinSubir = 0;
+      claves.forEach(function (k) { if (entiende.indexOf(k.slice(0, k.indexOf(":"))) < 0) { sinSubir++; return; } if (db.pend[k] <= t0) delete db.pend[k]; });
       var n = aplicar(r.docs); db.sync.ult = r.ahora || t0; db.sync.ok = Date.now(); if (r.url) db.sync.url = r.url; save();
-      S.sync = "Al día"; if (manual) toast("Sincronizado"); if (n) pintar();
+      S.sync = sinSubir ? "Actualiza el script de Fergard (v0.7.0) para guardar metas y diario" : "Al día"; if (manual) toast(S.sync); if (n) pintar();
     }).catch(function () { S.sync = "Sin conexión · se subirá después"; if (manual) toast("Sin conexión"); }).then(function () { syncing = false; pintarNube(); });
   }
   window.addEventListener("online", function () { sync(false); });
@@ -132,7 +133,7 @@
 
   /* ---------- vistas ---------- */
   function cab(t, sub) { return '<div class="cab"><div><h1>' + t + "</h1><p>" + sub + '</p></div><button class="ib" data-a="conf" aria-label="Ajustes">' + ico("set") + "</button></div>"; }
-  function vHoy() {
+  function vHoy0() {
     var f = H.hoy(), r = H.resumenDia(db, f), l = H.lunes(f), hs = listaHab().filter(function (h) { return H.programado(h, f); }), sem = "";
     for (var i = 0; i < 7; i++) { var d = H.addD(l, i), rd = H.resumenDia(db, d), pc = d > f || !rd.tot ? 0 : Math.round(100 * rd.ok / rd.tot); sem += '<div class="' + (d === f ? "hoy" : "") + '"><b><i style="height:' + pc + '%"></i></b>' + H.DIAS[i].charAt(0).toUpperCase() + "</div>"; }
     var h = '<div class="hero"><div class="t">Hábitos de hoy</div><div class="n">' + r.ok + "<small> / " + r.tot + '</small></div><div class="barra"><i style="width:' + (r.tot ? Math.round(100 * r.ok / r.tot) : 0) + '%"></i></div><div class="sem" aria-hidden="true">' + sem + "</div></div>";
@@ -141,7 +142,7 @@
     return cab("Hoy", fLargo(f)) + h + '<div class="sec"><span>Mis hábitos</span><button data-a="hnew">+ Nuevo</button></div>' + (hs.length ? '<div class="lista">' + hs.map(function (x) { return filaHab(x, f); }).join("") + "</div>" : vac) +
       (atH ? bloque("Atrasadas", atH, "") : "") + avisoCal() + bloque("Agenda de hoy", agenda(f), "Nada pendiente para hoy. Toca + para añadir.") + bloque("Mañana · " + fCorto(H.addD(f, 1)), agenda(H.addD(f, 1)), "Nada planeado para mañana todavía.");
   }
-  function vPend() {
+  function vPend0() {
     var f = H.hoy(), m = H.addD(f, 1), todas = listaTar(), listas = {}; todas.forEach(function (t) { if (t.l) listas[t.l] = 1; });
     var fl = function (t) { return !S.lista || t.l === S.lista; }, ab = todas.filter(function (t) { return !t.ok && fl(t); });
     var ord = function (a, b) { return (a.f || "9") < (b.f || "9") ? -1 : (a.f || "9") > (b.f || "9") ? 1 : (a.h || "99") < (b.h || "99") ? -1 : 1; };
@@ -151,7 +152,7 @@
     var chips = '<div class="chips"><button class="' + (!S.lista ? "on" : "") + '" data-a="lista" data-l="">Todas</button>' + Object.keys(listas).sort().map(function (l) { return '<button class="' + (S.lista === l ? "on" : "") + '" data-a="lista" data-l="' + esc(l) + '">#' + esc(l) + "</button>"; }).join("") + "</div>";
     var cuerpo = sec("Atrasadas", ab.filter(function (t) { return t.f && t.f < f; }), true) + sec("Hoy", ab.filter(function (t) { return t.f === f; })) + sec("Mañana", ab.filter(function (t) { return t.f === m; })) + sec("Próximos", ab.filter(function (t) { return t.f && t.f > m; }), true) + sec("Algún día", ab.filter(function (t) { return !t.f; }));
     if (!cuerpo) cuerpo = '<div class="vacio" style="margin-top:20px"><b>Todo al día</b>No tienes pendientes' + (S.lista ? " en #" + esc(S.lista) : "") + ". Toca + para añadir uno escribiendo.</div>";
-    return cab("Pendientes", ab.length + (ab.length === 1 ? " por hacer" : " por hacer")) + (Object.keys(listas).length ? chips : "") + cuerpo +
+    return cab("Pendientes", ab.length + " por hacer") + segPend() + statsSemana() + (Object.keys(listas).length ? chips : "") + cuerpo +
       (hechas.length ? bloque("Hechas", hechas.map(function (t) { return filaTar(t, true); }).join(""), "", '<button data-a="tbor">Borrar hechas</button>') : "");
   }
   function pts(f) { var n = evDia(f).length, t = tareasDe(f).filter(function (x) { return !x.ok; }).length, s = ""; for (var i = 0; i < Math.min(3, n + t); i++) s += "<i></i>"; return '<div class="pts">' + s + "</div>"; }
@@ -170,13 +171,13 @@
       '<div class="nav"><button data-a="calprev" aria-label="Anterior">' + ico("izq") + "</button><b>" + esc(tit) + '</b><button data-a="calnext" aria-label="Siguiente">' + ico("der") + "</button></div>" + cuerpo + avisoCal() +
       bloque(esc(fLargo(S.dia)), agenda(S.dia), "Sin eventos ni pendientes este día.", '<button data-a="addd">+ Añadir</button>') + (S.dia !== f ? '<button class="btn sec" data-a="calhoy">Ir a hoy</button>' : "");
   }
-  function vHab() {
+  function vHab0() {
     var hs = listaHab(), act = hs.filter(function (h) { return !h.arch; }), arc = hs.filter(function (h) { return h.arch; });
     var fila = function (h) { return '<div class="fila" role="button" tabindex="0" data-a="hdet" data-id="' + esc(h.id) + '"><div class="em">' + esc(h.e || "⭐") + '</div><div class="tx"><div class="tt">' + esc(h.n) + '</div><div class="st">' + esc(H.textoFrec(h)) + (h.tipo === "cant" ? " · " + h.meta + " " + esc(h.un || "") : "") + (textoRacha(h) ? " · " + textoRacha(h) : "") + "</div></div></div>"; };
     var pl = '<div class="vacio"><b>Empieza con una plantilla</b>Toca una para crearla y ajústala después.</div><div class="lista" style="margin-top:10px">' + H.PLANTILLAS.map(function (p, i) { return '<div class="fila" role="button" tabindex="0" data-a="hplant" data-i="' + i + '"><div class="em">' + p.e + '</div><div class="tx"><div class="tt">' + esc(p.n) + '</div><div class="st">' + esc(H.textoFrec(p)) + (p.tipo === "cant" ? " · " + p.meta + " " + esc(p.un) : "") + "</div></div></div>"; }).join("") + "</div>";
-    return cab("Hábitos", act.length + (act.length === 1 ? " hábito activo" : " hábitos activos")) + (act.length ? '<div class="lista">' + act.map(fila).join("") + "</div>" : pl) + '<button class="btn" data-a="hnew">+ Nuevo hábito</button>' + (arc.length ? bloque("Archivados", arc.map(fila).join(""), "") : "");
+    return cab("Hábitos", act.length + (act.length === 1 ? " hábito activo" : " hábitos activos")) + segHab() + (act.length ? '<div class="lista">' + act.map(fila).join("") + "</div>" : pl) + '<button class="btn" data-a="hnew">+ Nuevo hábito</button>' + (arc.length ? bloque("Archivados", arc.map(fila).join(""), "") : "");
   }
-  function vProg() {
+  function vProg0() {
     var f = H.hoy(), l = H.lunes(f), ini = H.addD(l, -28), hs = listaHab().filter(function (h) { return !h.arch; }), celdas = "";
     for (var d = ini; d <= H.addD(l, 6); d = H.addD(d, 1)) { var r = H.resumenDia(db, d), p = d > f || !r.tot ? -1 : r.ok / r.tot; celdas += '<i class="' + (p < 0 ? "" : p === 0 ? "" : p < .5 ? "a1" : p < .8 ? "a2" : p < 1 ? "a3" : "a4") + '" title="' + esc(fCorto(d)) + '"></i>'; }
     var mejor = 0; hs.forEach(function (h) { mejor = Math.max(mejor, H.racha(h, db, f)); });
@@ -189,6 +190,99 @@
       '<div class="sec"><span>Constancia diaria</span></div><div class="lista" style="padding:14px"><div class="celdas" role="img" aria-label="Mapa de constancia de las últimas 5 semanas">' + celdas + "</div></div>" +
       (hs.length ? '<div class="sec"><span>Por hábito</span></div><div class="lista">' + cards + "</div>" : '<div class="vacio">Crea hábitos para ver tu progreso.</div>');
   }
+  /* ---- diario, metas, listas, cierre y revisión ---- */
+  var MOODS = ["😞", "🙁", "😐", "🙂", "😄"], PAL = ["#1E2F57", "#B45309", "#2F6B4F", "#6D28D9", "#B3261E", "#0E7490"];
+  function setDia(f, a, t) { var d = db.diario[f] || { f: f }; if (a != null) d.a = a; if (t != null) d.t = t; if (!d.a && !(d.t || "").trim()) { if (db.diario[f]) quitar("diario", f); } else { db.diario[f] = d; touch("diario", f, d); } }
+  function moods(sel, act) { return '<div class="moods" role="group" aria-label="¿Cómo te sentiste?">' + MOODS.map(function (m, i) { return '<button class="' + (sel === i + 1 ? "on" : "") + '" data-a="' + act + '" data-v="' + (i + 1) + '" aria-label="Ánimo ' + (i + 1) + ' de 5" aria-pressed="' + (sel === i + 1) + '">' + m + "</button>"; }).join("") + "</div>"; }
+  function segHab() { return '<div class="seg"><button class="' + (S.hv === "hab" ? "on" : "") + '" data-a="hv" data-v="hab">Hábitos</button><button class="' + (S.hv === "metas" ? "on" : "") + '" data-a="hv" data-v="metas">Metas</button></div>'; }
+  function segPend() { return '<div class="seg"><button class="' + (S.pv === "fecha" ? "on" : "") + '" data-a="pv" data-v="fecha">Por fecha</button><button class="' + (S.pv === "lista" ? "on" : "") + '" data-a="pv" data-v="lista">Por lista</button></div>'; }
+  function statsSemana() {
+    var l = H.lunes(H.hoy()), fin = H.addD(l, 6), t = listaTar().filter(function (x) { return x.f && x.f >= l && x.f <= fin; }), ok = t.filter(function (x) { return x.ok; }).length;
+    return '<div class="big"><div><b>' + ok + "</b><span>Completadas</span></div><div><b>" + (t.length - ok) + "</b><span>Pendientes</span></div><div><b>" + t.length + "</b><span>Total de la semana</span></div></div>";
+  }
+  function avance(m) {
+    if (!m.hab) return m.act || 0; var h = db.habitos[m.hab]; if (!h) return 0; var desde = m.ini || "0000-00-00", tot = 0;
+    Object.keys(db.registros).forEach(function (k) { var r = db.registros[k]; if (r.h !== m.hab) return; Object.keys(r.v).forEach(function (dd) { if (r.m + "-" + dd < desde) return; var v = r.v[dd]; tot += h.tipo === "cant" ? v : (v >= 1 ? 1 : 0); }); });
+    return tot;
+  }
+  function filaMeta(m) {
+    var av = avance(m), obj = m.obj || 1, pc = Math.min(100, Math.round(100 * av / obj)), lograda = av >= obj, f = H.hoy(), extra = "";
+    if (m.fin && !lograda) { var dias = Math.round((H.pf(m.fin) - H.pf(f)) / 86400000); extra = dias < 0 ? " · venció el " + fCorto(m.fin) : " · " + dias + " días · necesitas " + (Math.ceil((obj - av) / Math.max(1, dias) * 10) / 10) + "/día"; }
+    var ctl = m.hab ? "" : '<div class="cant"><button data-a="mmenos" data-id="' + esc(m.id) + '" aria-label="Restar">−</button><button class="mas" data-a="mmas" data-id="' + esc(m.id) + '" aria-label="Sumar">+</button></div>';
+    return '<div class="fila" style="display:block" role="button" tabindex="0" data-a="medit" data-id="' + esc(m.id) + '"><div style="display:flex;align-items:center;gap:12px"><div class="em">' + esc(m.e || "🎯") + '</div><div class="tx"><div class="tt" style="white-space:normal">' + esc(m.n) + '</div><div class="st">' + av + " / " + obj + " " + esc(m.un || "") + (lograda ? ' · <span class="racha">¡Lograda!</span>' : esc(extra)) + "</div></div>" + ctl + '</div><div class="barra2"><i style="width:' + pc + '%"></i></div></div>';
+  }
+  function vMetas(sg) {
+    var ms = Object.keys(db.metas).map(function (k) { return db.metas[k]; }).sort(function (a, b) { return (a.upd || 0) - (b.upd || 0); });
+    return cab("Metas", ms.length + (ms.length === 1 ? " meta" : " metas")) + sg + (ms.length ? '<div class="lista">' + ms.map(filaMeta).join("") + "</div>" : '<div class="vacio"><b>Aún no tienes metas</b>Por ejemplo «leer 12 libros este año» o «caminar 200 000 pasos en diciembre». Se pueden ligar a un hábito y avanzan solas.</div>') + '<button class="btn" data-a="mnew">+ Nueva meta</button>';
+  }
+  function mEditor(id) {
+    var m = id ? db.metas[id] : null;
+    S.me = m ? JSON.parse(JSON.stringify(m)) : { id: null, n: "", e: "🎯", hab: "", obj: 10, un: "", fin: "", ini: H.hoy(), act: 0, lig: Object.keys(db.habitos).length > 0 };
+    if (m) S.me.lig = !!m.hab; pintarME();
+  }
+  function pintarME() {
+    var d = S.me, hs = listaHab().filter(function (h) { return !h.arch; });
+    abrir("<h3>" + (d.id ? "Editar meta" : "Nueva meta") + '</h3><div class="dup" style="grid-template-columns:70px 1fr"><div style="flex:0 0 76px"><label class="lbl" for="me-e">Icono</label><input id="me-e" value="' + esc(d.e) + '" maxlength="4" style="text-align:center;font-size:22px"></div><div><label class="lbl" for="me-n">Meta</label><input id="me-n" value="' + esc(d.n) + '" placeholder="Leer 12 libros este año"></div></div>' +
+      '<label class="lbl">¿Cómo avanza?</label><div class="seg"><button class="' + (d.lig ? "on" : "") + '" data-a="mlig" data-v="1">Con un hábito</button><button class="' + (!d.lig ? "on" : "") + '" data-a="mlig" data-v="0">A mano</button></div>' +
+      (d.lig ? (hs.length ? '<label class="lbl" for="me-h">Hábito</label><select id="me-h">' + hs.map(function (h) { return '<option value="' + esc(h.id) + '"' + (d.hab === h.id ? " selected" : "") + ">" + esc((h.e || "") + " " + h.n) + "</option>"; }).join("") + '</select><label class="lbl" for="me-i">Contar desde</label><input id="me-i" type="date" value="' + esc(d.ini) + '">' : '<div class="vacio">Primero crea un hábito, o elige «A mano».</div>') : '<label class="lbl" for="me-u">Unidad</label><input id="me-u" value="' + esc(d.un) + '" placeholder="libros, km, soles…"><label class="lbl" for="me-a">Avance actual</label><input id="me-a" type="number" inputmode="decimal" value="' + esc(d.act || 0) + '">') +
+      '<div class="dup"><div><label class="lbl" for="me-o">Objetivo</label><input id="me-o" type="number" inputmode="decimal" min="1" value="' + esc(d.obj) + '"></div><div><label class="lbl" for="me-f">Fecha límite (opcional)</label><input id="me-f" type="date" value="' + esc(d.fin || "") + '"></div></div><button class="btn" data-a="msave">Guardar</button>' + (d.id ? '<button class="btn bad" data-a="mdel">Eliminar</button>' : ""));
+  }
+  function leerME() { var d = S.me; if (!d || !$("#me-n")) return; d.n = $("#me-n").value; d.e = $("#me-e").value.trim() || "🎯"; d.obj = +$("#me-o").value || 1; d.fin = $("#me-f").value; if ($("#me-h")) { d.hab = $("#me-h").value; d.ini = $("#me-i").value || H.hoy(); } if ($("#me-u")) d.un = $("#me-u").value.trim(); if ($("#me-a")) d.act = +$("#me-a").value || 0; }
+  function nombresListas() { var o = {}; (db.ajustes.listas || []).forEach(function (l) { o[l] = 1; }); listaTar().forEach(function (t) { if (t.l) o[t.l] = 1; }); return Object.keys(o).sort(); }
+  function colLista(n) { var h = 0; for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return PAL[h % PAL.length]; }
+  function vPendLista() {
+    var nombres = nombresListas().concat([""]), html = "";
+    nombres.forEach(function (n) {
+      var its = listaTar().filter(function (t) { return (t.l || "") === n; }); if (n === "" && !its.length) return;
+      var ab = its.filter(function (t) { return !t.ok; }).sort(function (a, b) { return (a.f || "9") < (b.f || "9") ? -1 : 1; }), hc = its.filter(function (t) { return t.ok; }), nm = n || "Sin lista";
+      html += '<div class="lcard"><div class="lh"><span class="pto" style="background:' + colLista(nm) + '"></span><b>' + esc(nm) + '</b><span class="cnt">' + hc.length + "/" + its.length + "</span>" + (hc.length ? '<button data-a="lbor" data-l="' + esc(n) + '">Borrar hechas</button>' : "") + "</div>" +
+        (ab.concat(hc).map(function (t) { return filaTar(t, true); }).join("")) + '<div class="ladd"><input class="lad" data-l="' + esc(n) + '" placeholder="Añadir a ' + esc(nm) + '…" enterkeyhint="done" aria-label="Añadir a ' + esc(nm) + '"></div></div>';
+    });
+    return cab("Pendientes", "Tus listas") + segPend() + '<div class="ladd" style="margin-bottom:12px;padding:0"><input id="nl-n" placeholder="Nueva lista (Compras, Casa, Viaje…)" enterkeyhint="done" aria-label="Nueva lista"></div>' + (html || '<div class="vacio"><b>Sin listas todavía</b>Crea una arriba, por ejemplo «Compras», y añade cosas con casilla.</div>');
+  }
+  function vHoy() {
+    var h = vHoy0(), f = H.hoy(), pr = listaTar().filter(function (t) { return !t.ok && t.f === f && t.p >= 1; }).map(function (t) { return filaTar(t); }).join("");
+    if (pr) h = h.replace('<div class="sec"><span>Agenda de hoy</span>', bloque("Prioridades de hoy", pr, "") + '<div class="sec"><span>Agenda de hoy</span>');
+    var d = db.diario[f] || {};
+    return h + '<div class="sec"><span>Diario de hoy</span><button data-a="dsheet" data-f="' + f + '">Abrir</button></div><div class="lista" style="padding:14px">' + moods(d.a, "dm") + '<input id="dh-t" style="margin-top:10px" placeholder="Una línea sobre tu día…" value="' + esc(d.t || "") + '" aria-label="Una línea sobre tu día"></div><button class="btn sec" data-a="cierre">Cerrar el día</button>';
+  }
+  function vPend() { return S.pv === "lista" ? vPendLista() : vPend0(); }
+  function vHab() { return S.hv === "metas" ? vMetas(segHab()) : vHab0(); }
+  function vProg() {
+    var h = vProg0(), ds = Object.keys(db.diario).map(function (k) { return db.diario[k]; }).filter(function (d) { return !d.sem; }).sort(function (a, b) { return a.f < b.f ? 1 : -1; }).slice(0, 10);
+    h = h.replace('<div class="big">', '<div class="dup"><button class="btn sec" data-a="revsem" style="margin-top:0">Revisión semanal</button><button class="btn sec" data-a="dsheet" data-f="' + H.hoy() + '" style="margin-top:0">Diario</button></div><div class="big" style="margin-top:12px">');
+    return h + (ds.length ? '<div class="sec"><span>Diario reciente</span></div><div class="lista">' + ds.map(function (d) { return '<div class="fila t" role="button" tabindex="0" data-a="dsheet" data-f="' + esc(d.f) + '"><div class="em">' + (MOODS[(d.a || 3) - 1]) + '</div><div class="tx"><div class="tt">' + esc(fRel(d.f)) + '</div><div class="st">' + esc(d.t || "") + "</div></div></div>"; }).join("") + "</div>" : "");
+  }
+  function dSheet(f) {
+    var d = db.diario[f] || {}; S.df = f;
+    abrir("<h3>Diario · " + esc(fRel(f)) + "</h3>" + moods(d.a, "dmm") + '<label class="lbl" for="d-t">¿Cómo fue tu día?</label><textarea id="d-t" rows="4" placeholder="Lo mejor, lo difícil, algo que agradeces…">' + esc(d.t || "") + '</textarea><button class="btn" data-a="dsave">Guardar</button>');
+    S.dmood = d.a || 0;
+  }
+  function pendCierre() { var f = H.hoy(); return { hs: listaHab().filter(function (h) { return H.programado(h, f) && !H.cumplido(h, H.valor(db, h.id, f)); }), ts: listaTar().filter(function (t) { return !t.ok && t.f && t.f <= f; }).sort(function (a, b) { return a.f < b.f ? -1 : 1; }) }; }
+  function cierre() {
+    var f = H.hoy(), c = pendCierre(), r = H.resumenDia(db, f), d = db.diario[f] || {}; S.dmood = d.a || 0;
+    var hs = c.hs.map(function (h) { return '<div class="fila"><div class="em">' + esc(h.e || "⭐") + '</div><div class="tx"><div class="tt">' + esc(h.n) + '</div><div class="st">' + (h.tipo === "cant" ? H.valor(db, h.id, f) + "/" + h.meta + " " + esc(h.un || "") : "Sin marcar") + '</div></div><button class="btn" style="width:auto;height:40px;margin:0;padding:0 16px;font-size:14px" data-a="cl-h" data-id="' + esc(h.id) + '">Hecho</button></div>'; }).join("");
+    var ts = c.ts.map(function (t) { return filaTar(t, true).replace('data-a="tchk"', 'data-a="cl-t"').replace('data-a="tedit"', 'data-x="1"'); }).join("");
+    abrir("<h3>Cierre del día</h3><div class=\"big\"><div><b>" + r.ok + "/" + r.tot + "</b><span>Hábitos hoy</span></div><div><b>" + c.ts.length + "</b><span>Pendientes sin hacer</span></div></div>" +
+      (hs ? '<div class="sec"><span>Hábitos por cerrar</span></div><div class="lista">' + hs + "</div>" : "") + (ts ? '<div class="sec"><span>Pendientes sin hacer</span></div><div class="lista">' + ts + '</div><button class="btn sec" data-a="cl-man">Pasar los ' + c.ts.length + " a mañana</button>" : "") + (!hs && !ts ? '<div class="vacio"><b>¡Día completo!</b>No te queda nada pendiente.</div>' : "") +
+      '<div class="sec"><span>¿Cómo estuvo tu día?</span></div>' + moods(d.a, "dmm") + '<input id="d-t" style="margin-top:10px" placeholder="Una línea sobre hoy…" value="' + esc(d.t || "") + '"><button class="btn" data-a="cl-ok">Listo</button>');
+  }
+  function revSemana() {
+    var f = H.hoy(), l = H.lunes(f), fin = H.addD(l, 6), hs = listaHab().filter(function (h) { return !h.arch; }), tot = 0, hec = 0, filas = [];
+    hs.forEach(function (h) { var p = 0, o = 0; for (var i = 0; i < 7; i++) { var d = H.addD(l, i); if (d > f || !H.programado(h, d)) continue; p++; if (H.cumplido(h, H.valor(db, h.id, d))) o++; } tot += p; hec += o; if (p) filas.push({ h: h, p: p, o: o, pc: Math.round(100 * o / p) }); });
+    filas.sort(function (a, b) { return b.pc - a.pc; });
+    var ts = listaTar().filter(function (t) { return t.f && t.f >= l && t.f <= fin; }), tok = ts.filter(function (t) { return t.ok; }).length, pend = listaTar().filter(function (t) { return !t.ok && t.f && t.f <= fin; });
+    var an = [], i; for (i = 0; i < 7; i++) { var dd = db.diario[H.addD(l, i)]; if (dd && dd.a) an.push(dd.a); }
+    var prom = an.length ? MOODS[Math.round(an.reduce(function (a, b) { return a + b; }, 0) / an.length) - 1] : "—", rv = db.diario["S" + l] || {};
+    var ms = Object.keys(db.metas).map(function (k) { return db.metas[k]; }).map(function (m) { return '<div class="fila" style="min-height:48px"><div class="em">' + esc(m.e || "🎯") + '</div><div class="tx"><div class="tt">' + esc(m.n) + '</div><div class="st">' + avance(m) + " / " + (m.obj || 1) + " " + esc(m.un || "") + "</div></div></div>"; }).join("");
+    S.rl = l;
+    abrir("<h3>Revisión semanal</h3><div class=\"st\" style=\"color:var(--mut);font-weight:600;margin:-4px 0 10px\">" + esc(fCorto(l)) + " – " + esc(fCorto(fin)) + '</div><div class="big"><div><b>' + (tot ? Math.round(100 * hec / tot) : 0) + "%</b><span>Hábitos cumplidos</span></div><div><b>" + tok + "/" + ts.length + "</b><span>Pendientes hechos</span></div><div><b>" + prom + "</b><span>Ánimo promedio</span></div></div>" +
+      (filas.length ? '<div class="sec"><span>Por hábito</span></div><div class="lista">' + filas.map(function (x) { return '<div class="fila" style="min-height:48px"><div class="em">' + esc(x.h.e || "⭐") + '</div><div class="tx"><div class="tt">' + esc(x.h.n) + '</div><div class="st">' + x.o + " de " + x.p + " días</div></div><b>" + x.pc + "%</b></div>"; }).join("") + "</div>" : "") +
+      (filas.length > 1 ? '<div class="vacio" style="padding:10px 4px">Lo mejor: <b style="display:inline">' + esc(filas[0].h.n) + "</b> · A reforzar: <b style=\"display:inline\">" + esc(filas[filas.length - 1].h.n) + "</b></div>" : "") +
+      (ms ? '<div class="sec"><span>Metas</span></div><div class="lista">' + ms + "</div>" : "") +
+      '<label class="lbl" for="rv-t">¿Qué salió bien y qué quieres mejorar la próxima semana?</label><textarea id="rv-t" rows="3">' + esc(rv.t || "") + "</textarea>" +
+      (pend.length ? '<button class="btn sec" data-a="rv-sig">Pasar los ' + pend.length + " pendientes sin hacer a la próxima semana</button>" : "") + '<button class="btn" data-a="rv-ok">Guardar revisión</button>');
+  }
   var TABS = [["hoy", "Hoy"], ["pend", "Pendientes"], ["cal", "Calendario"], ["hab", "Hábitos"], ["prog", "Progreso"]];
   function pintarTabs() { $("#tabs").innerHTML = TABS.map(function (t) { return '<button class="' + (S.tab === t[0] ? "on" : "") + '" data-a="tab" data-t="' + t[0] + '" aria-current="' + (S.tab === t[0]) + '">' + ico(t[0]) + t[1] + "</button>"; }).join(""); }
   function pintar() {
@@ -199,22 +293,22 @@
   function pintarNube() { var n = Object.keys(db.pend).length, e = $("#fab"); if (e) e.title = n ? n + " cambio(s) por subir" : ""; }
 
   /* ---------- hojas ---------- */
-  function abrir(html) { var m = $("#modal"); m.innerHTML = '<div class="caja"><div class="asa"></div>' + html + "</div>"; m.hidden = false; m.onclick = function (e) { if (e.target === m) cerrar(); }; }
-  function cerrar() { $("#modal").hidden = true; $("#modal").innerHTML = ""; S.hd = null; S.qa = null; }
+  function abrir(html) { var m = $("#modal"); m.innerHTML = '<div class="caja"><div class="ctop"><div class="asa"></div><button class="cerrar" data-a="mcerrar" aria-label="Cerrar">×</button></div>' + html + "</div>"; m.hidden = false; m.onclick = function (e) { if (e.target === m) cerrar(); }; }
+  function cerrar() { $("#modal").hidden = true; $("#modal").innerHTML = ""; S.hd = null; S.qa = null; S.me = null; }
   function addTarea(o) {
-    var t = { id: H.uid(), t: o.titulo, f: o.fecha || "", h: o.hora || "", l: o.lista || "", p: o.prioridad || 0, ok: false, nota: "", sub: [] };
+    var t = { id: H.uid(), t: o.titulo, f: o.fecha || "", h: o.hora || "", l: o.lista || "", p: o.prioridad || 0, av: o.av || 0, ok: false, nota: "", sub: [] };
     db.tareas[t.id] = t; touch("tarea", t.id, t); return t;
   }
   function parseQA(deTexto) {
     var v = ($("#qa-t").value || ""), r = H.parsear(v, H.hoy()), fi = $("#qa-f"), hi = $("#qa-h");
     if (deTexto !== false) { if (r.fecha) fi.value = r.fecha; if (r.hora) hi.value = r.hora; }
-    r.fecha = fi.value || ""; r.hora = r.fecha ? (hi.value || "") : ""; S.qa.r = r;
+    r.fecha = fi.value || ""; r.hora = r.fecha ? (hi.value || "") : ""; r.av = r.hora ? (+($("#qa-a") && $("#qa-a").value) || 0) : 0; S.qa.r = r;
     var c = []; c.push(r.fecha ? "📅 " + fRel(r.fecha) : "Sin fecha (algún día)"); if (r.hora) c.push("🕒 " + r.hora); if (r.lista) c.push("#" + r.lista); if (r.prioridad) c.push(r.prioridad === 2 ? "Prioridad alta" : "Prioridad media");
     $("#qa-p").innerHTML = c.map(function (x) { return '<span class="pill cal">' + esc(x) + "</span>"; }).join("");
   }
   function abrirAdd(f) {
     S.qa = { f: f || "", r: null };
-    abrir('<h3>Añadir</h3><input id="qa-t" placeholder="Llamar al dentista mañana 10am #salud !" autocomplete="off" autocapitalize="sentences" enterkeyhint="done"><div class="dup"><div><label class="lbl" for="qa-f">Fecha (puedes dejarla en blanco)</label><input id="qa-f" type="date" value="' + esc(S.qa.f || H.hoy()) + '"></div><div><label class="lbl" for="qa-h">Hora</label><input id="qa-h" type="time"></div></div><div class="chips" style="margin-top:8px"><button data-a="qa-fh" data-v="hoy">Hoy</button><button data-a="qa-fh" data-v="man">Mañana</button><button data-a="qa-fh" data-v="no">Sin fecha</button></div><div class="parte" id="qa-p"></div><button class="btn" data-a="qa-tarea">Añadir pendiente</button><button class="btn sec" data-a="qa-evento">Crear evento en Google Calendar</button><button class="btn sec" data-a="hnew">Nuevo hábito</button><div class="vacio" style="padding:14px 4px 0;font-size:13px">Ejemplos: «pagar la luz hoy», «reunión con Laura el viernes 15:30», «comprar regalo en 3 días #casa». Con ! o «urgente» sube la prioridad. Si no pones fecha queda como «algún día» (por ejemplo una compra futura).</div>');
+    abrir('<h3>Añadir</h3><input id="qa-t" placeholder="Llamar al dentista mañana 10am #salud !" autocomplete="off" autocapitalize="sentences" enterkeyhint="done"><div class="dup"><div><label class="lbl" for="qa-f">Fecha (puedes dejarla en blanco)</label><input id="qa-f" type="date" value="' + esc(S.qa.f || H.hoy()) + '"></div><div><label class="lbl" for="qa-h">Hora</label><input id="qa-h" type="time"></div></div><div class="chips" style="margin-top:8px"><button data-a="qa-fh" data-v="hoy">Hoy</button><button data-a="qa-fh" data-v="man">Mañana</button><button data-a="qa-fh" data-v="no">Sin fecha</button></div><label class="lbl" for="qa-a">Avisarme (si tiene hora)</label><select id="qa-a">' + AVISOS.map(function (a) { return '<option value="' + a[0] + '">' + a[1] + "</option>"; }).join("") + '</select><div class="parte" id="qa-p"></div><button class="btn" data-a="qa-tarea">Añadir pendiente</button><button class="btn sec" data-a="qa-evento">Crear evento en Google Calendar</button><button class="btn sec" data-a="hnew">Nuevo hábito</button><div class="vacio" style="padding:14px 4px 0;font-size:13px">Ejemplos: «pagar la luz hoy», «reunión con Laura el viernes 15:30», «comprar regalo en 3 días #casa». Con ! o «urgente» sube la prioridad. Si no pones fecha queda como «algún día» (por ejemplo una compra futura).</div>');
     parseQA(); setTimeout(function () { var i = $("#qa-t"); if (i) i.focus(); }, 60);
   }
   function crearEvento(t, f, h) {
@@ -224,11 +318,12 @@
       toast(r && r.error === "operacion_desconocida" ? "Actualiza el script de Fergard (v0.6.0)" : "No se pudo crear (" + ((r && r.error) || "error") + ")"); return false;
     }).catch(function () { toast("Sin conexión: no se pudo crear el evento"); return false; });
   }
+  var AVISOS = [[0, "A la hora"], [5, "5 min antes"], [15, "15 min antes"], [30, "30 min antes"], [60, "1 hora antes"], [120, "2 horas antes"]];
   function tEditor(id) {
     var t = db.tareas[id]; if (!t) return; S.td = id;
     var listas = {}; listaTar().forEach(function (x) { if (x.l) listas[x.l] = 1; });
     abrir('<h3>Pendiente</h3><label class="lbl" for="te-t">Título</label><input id="te-t" value="' + esc(t.t) + '"><div class="dup"><div><label class="lbl" for="te-f">Fecha</label><input id="te-f" type="date" value="' + esc(t.f) + '"></div><div><label class="lbl" for="te-h">Hora</label><input id="te-h" type="time" value="' + esc(t.h) + '"></div></div>' +
-      '<div class="dup"><div><label class="lbl" for="te-l">Lista</label><input id="te-l" list="te-ls" value="' + esc(t.l) + '" placeholder="casa, trabajo…"><datalist id="te-ls">' + Object.keys(listas).map(function (l) { return '<option value="' + esc(l) + '">'; }).join("") + '</datalist></div><div><label class="lbl" for="te-p">Prioridad</label><select id="te-p"><option value="0"' + (!t.p ? " selected" : "") + '>Normal</option><option value="1"' + (t.p === 1 ? " selected" : "") + '>Media</option><option value="2"' + (t.p === 2 ? " selected" : "") + ">Alta</option></select></div></div>" +
+      '<div class="dup"><div><label class="lbl" for="te-l">Lista</label><input id="te-l" list="te-ls" value="' + esc(t.l) + '" placeholder="casa, trabajo…"><datalist id="te-ls">' + Object.keys(listas).map(function (l) { return '<option value="' + esc(l) + '">'; }).join("") + '</datalist></div><div><label class="lbl" for="te-p">Prioridad</label><select id="te-p"><option value="0"' + (!t.p ? " selected" : "") + '>Normal</option><option value="1"' + (t.p === 1 ? " selected" : "") + '>Media</option><option value="2"' + (t.p === 2 ? " selected" : "") + ">Alta</option></select></div></div>" + '<label class="lbl" for="te-a">Avisarme (si tiene hora)</label><select id="te-a">' + AVISOS.map(function (a) { return '<option value="' + a[0] + '"' + ((t.av || 0) === a[0] ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") + "</select>" +
       '<label class="lbl">Pasos</label><div id="te-s">' + (t.sub || []).map(subHtml).join("") + '</div><button class="btn sec" data-a="tsubadd" style="height:44px;margin-top:4px">+ Añadir paso</button><label class="lbl" for="te-n">Nota</label><textarea id="te-n" rows="2">' + esc(t.nota || "") + '</textarea>' +
       '<button class="btn" data-a="tsave">Guardar</button><div class="dup"><button class="btn sec" data-a="tmanana">Pasar a mañana</button><button class="btn sec" data-a="tcal">A Google Calendar</button></div><button class="btn bad" data-a="tdel">Borrar</button>');
   }
@@ -236,7 +331,7 @@
   function leerSubs() { return $$("#te-s .sub").map(function (r) { return { t: $("input", r).value.trim(), ok: $(".cb", r).classList.contains("on") }; }).filter(function (s) { return s.t; }); }
   function leerTE() {
     var t = db.tareas[S.td]; if (!t) return null; var ti = $("#te-t").value.trim(); if (!ti) { toast("Escribe un título"); return null; }
-    t.t = ti; t.f = $("#te-f").value; t.h = t.f ? $("#te-h").value : ""; t.l = $("#te-l").value.trim().replace(/^#/, ""); t.p = +$("#te-p").value; t.nota = $("#te-n").value.trim(); t.sub = leerSubs(); return t;
+    t.t = ti; t.f = $("#te-f").value; t.h = t.f ? $("#te-h").value : ""; t.l = $("#te-l").value.trim().replace(/^#/, ""); t.p = +$("#te-p").value; t.av = +$("#te-a").value || 0; t.nota = $("#te-n").value.trim(); t.sub = leerSubs(); return t;
   }
 
   function hEditor(id) {
@@ -273,7 +368,7 @@
     var url = db.sync.url, n = Object.keys(db.pend).length;
     abrir('<h3>Ajustes</h3><label class="lbl">Acceso</label><div id="acc"></div><label class="lbl">Sincronización</label><div style="font-size:14px;color:var(--mut);line-height:1.5">' + esc(!cfg().token ? "Sin vincular" : S.sync || (db.sync.ok ? "Al día" : "Lista para sincronizar")) + " · pendientes: " + n + '</div><div class="dup" style="margin-top:8px"><button class="btn sec" style="margin:0" data-a="sync">Sincronizar</button>' + (url ? '<a class="btn sec" style="margin:0" target="_blank" rel="noopener" href="' + esc(url) + '">Mi hoja</a>' : "") + "</div>" +
       '<label class="lbl">Avisos dentro de la app</label><label class="sw"><input type="checkbox" id="aj-rec"' + (db.ajustes.rec !== false ? " checked" : "") + ' data-a="rec"> Avisarme de pendientes, hábitos con hora y eventos</label><div style="font-size:13px;color:var(--mut);margin-top:6px;line-height:1.45">Los avisos aparecen mientras la app está abierta. El iPhone no permite avisos con la app cerrada sin un servidor de notificaciones.</div>' +
-      '<label class="lbl">Google Calendar</label><div style="font-size:14px;color:var(--mut);line-height:1.5">' + (S.evErr ? "Problema: " + esc(S.evErr) : S.ev.length ? "Conectado · " + S.ev.length + " evento(s) cargados" : "Se leen tus calendarios propios y los eventos nuevos se crean en el principal.") + '</div><button class="btn sec" data-a="evrec" style="margin-top:8px">Recargar calendario</button>' +
+      '<label class="lbl" for="aj-cierre">Aviso para cerrar el día (vacío = sin aviso)</label><input id="aj-cierre" type="time" value="' + esc(db.ajustes.cierre === undefined ? "21:00" : db.ajustes.cierre) + '"><label class="sw"><input type="checkbox" id="aj-rev"' + (db.ajustes.rev !== false ? " checked" : "") + ' data-a="revaj"> Recordarme la revisión semanal los domingos (6 pm)</label><label class="lbl">Google Calendar</label><div style="font-size:14px;color:var(--mut);line-height:1.5">' + (S.evErr ? "Problema: " + esc(S.evErr) : S.ev.length ? "Conectado · " + S.ev.length + " evento(s) cargados" : "Se leen tus calendarios propios y los eventos nuevos se crean en el principal.") + '</div><button class="btn sec" data-a="evrec" style="margin-top:8px">Recargar calendario</button>' +
       '<label class="lbl">Espacio en este dispositivo</label><div style="font-size:14px;color:var(--mut);line-height:1.5">Solo una copia pequeña de tus datos y la cáscara de la app.</div><button class="btn sec" data-a="liberar" style="margin-top:8px">Liberar espacio</button><div style="font-size:12.5px;color:var(--mut);margin-top:18px;text-align:center">Hábitos v' + VERSION + '</div><button class="btn sec" data-a="mcerrar">Cerrar</button>');
     if (window.FergardAcceso) FergardAcceso.panel($("#acc"));
   }
@@ -285,17 +380,20 @@
   function revisar() {
     if (db.ajustes.rec === false || !$("#aviso").hidden) return;
     var f = H.hoy(), n = new Date(), ahora = n.getHours() * 60 + n.getMinutes(), av = avKey(), it = [];
-    listaTar().forEach(function (t) { if (!t.ok && t.f === f && t.h) it.push({ k: "t|" + t.id + "|" + t.h, hm: t.h, lead: 0, tit: t.t, sub: "Pendiente de las " + t.h, tipo: "t", id: t.id }); });
+    listaTar().forEach(function (t) { if (!t.ok && t.f === f && t.h) it.push({ k: "t|" + t.id + "|" + t.h + "|" + (t.av || 0), hm: t.h, lead: t.av || 0, tit: t.t, sub: t.av ? "Empieza en " + t.av + " min · " + t.h : "Pendiente de las " + t.h, tipo: "t", id: t.id }); });
     listaHab().forEach(function (h) { if (h.hora && H.programado(h, f) && !H.cumplido(h, H.valor(db, h.id, f))) it.push({ k: "h|" + h.id + "|" + h.hora, hm: h.hora, lead: 0, tit: (h.e || "") + " " + h.n, sub: h.tipo === "cant" ? "Meta de hoy: " + h.meta + " " + (h.un || "") : "Es hora de tu hábito", tipo: "h", id: h.id }); });
     evDia(f).forEach(function (e) { if (!e.td) it.push({ k: "e|" + e.id + "|" + e.i, hm: e.i.slice(11), lead: 10, tit: e.t, sub: "Evento a las " + e.i.slice(11) + (e.l ? " · " + e.l : ""), tipo: "e" }); });
     for (var i = 0; i < it.length; i++) {
       var x = it[i], m = mins(x.hm); if (av.k[x.k]) continue; if (S.snooze[x.k] && Date.now() < S.snooze[x.k]) continue;
       if (ahora >= m - x.lead && ahora <= m + 120) { mostrarAviso(x); return; }
     }
+    var ch = db.ajustes.cierre === undefined ? "21:00" : db.ajustes.cierre, c = pendCierre();
+    if (ch && ahora >= mins(ch) && ahora <= mins(ch) + 120 && !av.k["c|" + f] && !(S.snooze["c|" + f] && Date.now() < S.snooze["c|" + f]) && (c.hs.length || c.ts.length)) { mostrarAviso({ k: "c|" + f, tipo: "cierre", tit: "Cierra tu día", sub: c.hs.length + " hábito(s) y " + c.ts.length + " pendiente(s) sin terminar" }); return; }
+    var lun = H.lunes(f); if (H.dow(f) === 7 && db.ajustes.rev !== false && ahora >= 18 * 60 && !av.k["r|" + lun]) mostrarAviso({ k: "r|" + lun, tipo: "rev", tit: "Revisión de la semana", sub: "Mira cómo te fue y prepara la próxima" });
   }
   function mostrarAviso(x) {
     var a = $("#aviso"); S.av = x;
-    a.innerHTML = "<b>" + esc(x.tit) + "</b><span>" + esc(x.sub) + '</span><div class="ac">' + (x.tipo !== "e" ? '<button class="p" data-a="av-ok">' + (x.tipo === "t" ? "Hecho" : "Cumplido") + "</button>" : "") + '<button data-a="av-luego">En 15 min</button><button data-a="av-x">Cerrar</button></div>'; a.hidden = false;
+    a.innerHTML = "<b>" + esc(x.tit) + "</b><span>" + esc(x.sub) + '</span><div class="ac">' + (x.tipo === "cierre" || x.tipo === "rev" ? '<button class="p" data-a="av-abrir">Abrir</button>' : x.tipo !== "e" ? '<button class="p" data-a="av-ok">' + (x.tipo === "t" ? "Hecho" : "Cumplido") + "</button>" : "") + '<button data-a="av-luego">En 15 min</button><button data-a="av-x">Cerrar</button></div>'; a.hidden = false;
   }
   function cerrarAviso(marcar) { var x = S.av; $("#aviso").hidden = true; if (x && marcar) avMarcar(x.k); S.av = null; setTimeout(revisar, 400); }
 
@@ -303,7 +401,7 @@
   var A = {
     tab: function (el) { S.tab = el.dataset.t; $("#app").scrollTop = 0; if (S.tab === "cal") { var r = rangoVista(); cargarEv(r[0], r[1]); } pintar(); },
     conf: ajustes, mcerrar: cerrar,
-    fab: function () { if (S.tab === "hab") hEditor(null); else abrirAdd(S.tab === "cal" ? S.dia : ""); },
+    fab: function () { if (S.tab === "hab") { if (S.hv === "metas") mEditor(null); else hEditor(null); } else abrirAdd(S.tab === "cal" ? S.dia : ""); },
     addd: function () { abrirAdd(S.dia); },
     hchk: function (el) { var h = db.habitos[el.dataset.id], f = H.hoy(); if (!h) return; setValor(h, f, H.valor(db, h.id, f) >= 1 ? 0 : 1); pintar(); },
     hmas: function (el) { var h = db.habitos[el.dataset.id], f = H.hoy(); setValor(h, f, H.valor(db, h.id, f) + paso(h)); pintar(); },
@@ -362,15 +460,60 @@
     var p = H.pf(S.dia); if (S.cal === "mes") S.dia = H.fstr(new Date(p.getFullYear(), p.getMonth() + d, 1)); else S.dia = H.addD(S.dia, 7 * d);
     var r = rangoVista(); cargarEv(r[0], r[1]); pintar();
   }
+  Object.assign(A, {
+    hv: function (el) { S.hv = el.dataset.v; pintar(); }, pv: function (el) { S.pv = el.dataset.v; pintar(); },
+    mnew: function () { mEditor(null); }, medit: function (el) { mEditor(el.dataset.id); },
+    mlig: function (el) { leerME(); S.me.lig = el.dataset.v === "1"; if (!S.me.lig) S.me.hab = ""; pintarME(); },
+    msave: function () {
+      leerME(); var d = S.me; if (!d.n.trim()) { toast("Ponle nombre a la meta"); return; } if (d.lig && !d.hab) { toast("Elige un hábito o cambia a «A mano»"); return; }
+      var m = d.id ? db.metas[d.id] : { id: H.uid() }, h = d.lig ? db.habitos[d.hab] : null;
+      m.n = d.n.trim(); m.e = d.e; m.obj = d.obj; m.fin = d.fin; m.hab = d.lig ? d.hab : ""; m.hn = h ? h.n : ""; m.un = h ? (h.tipo === "cant" ? h.un : "veces") : d.un; m.ini = d.ini || H.hoy(); m.act = d.lig ? 0 : d.act; db.metas[m.id] = m; touch("meta", m.id, m); cerrar(); pintar(); toast("Meta guardada");
+    },
+    mdel: function () { if (!confirm("¿Eliminar esta meta?")) return; quitar("meta", S.me.id); cerrar(); pintar(); },
+    mmas: function (el) { var m = db.metas[el.dataset.id]; m.act = (m.act || 0) + 1; touch("meta", m.id, m); pintar(); },
+    mmenos: function (el) { var m = db.metas[el.dataset.id]; m.act = Math.max(0, (m.act || 0) - 1); touch("meta", m.id, m); pintar(); },
+    dm: function (el) { setDia(H.hoy(), +el.dataset.v, null); pintar(); },
+    dmm: function (el) { S.dmood = +el.dataset.v; $$(".moods button").forEach(function (b) { b.classList.toggle("on", b === el); b.setAttribute("aria-pressed", b === el); }); },
+    dsheet: function (el) { dSheet(el.dataset.f); },
+    dsave: function () { setDia(S.df, S.dmood || null, $("#d-t").value); cerrar(); pintar(); toast("Diario guardado"); },
+    cierre: cierre,
+    "cl-h": function (el) { var h = db.habitos[el.dataset.id]; setValor(h, H.hoy(), h.tipo === "cant" ? h.meta : 1); cierre(); pintar(); },
+    "cl-t": function (el) { var t = db.tareas[el.dataset.id]; if (t) { t.ok = !t.ok; touch("tarea", t.id, t); } cierre(); pintar(); },
+    "cl-man": function () { var c = pendCierre(), m = H.addD(H.hoy(), 1); c.ts.forEach(function (t) { t.f = m; touch("tarea", t.id, t); }); cierre(); pintar(); toast(c.ts.length + " pendientes pasaron a mañana"); },
+    "cl-ok": function () { setDia(H.hoy(), S.dmood || null, $("#d-t").value); cerrar(); pintar(); toast("Día cerrado. ¡Buen descanso!"); },
+    revsem: revSemana, revaj: function (el) { db.ajustes.rev = el.checked; touch("ajustes", "a", db.ajustes); },
+    "rv-sig": function () { var l = H.lunes(H.hoy()), sig = H.addD(l, 7), fin = H.addD(l, 6), n = 0; listaTar().forEach(function (t) { if (!t.ok && t.f && t.f <= fin) { t.f = sig; touch("tarea", t.id, t); n++; } }); revSemana(); pintar(); toast(n + " pendientes pasaron a la próxima semana"); },
+    "rv-ok": function () { var l = S.rl, t = $("#rv-t").value.trim(); if (t) { db.diario["S" + l] = { f: l, sem: true, t: t }; touch("diario", "S" + l, db.diario["S" + l]); } else if (db.diario["S" + l]) quitar("diario", "S" + l); cerrar(); toast("Revisión guardada"); },
+    "av-abrir": function () { var x = S.av; cerrarAviso(true); if (x && x.tipo === "rev") revSemana(); else cierre(); },
+    lbor: function (el) { var n = el.dataset.l; listaTar().forEach(function (t) { if (t.ok && (t.l || "") === n) quitar("tarea", t.id); }); pintar(); },
+    lnew: function () { var i = $("#nl-n"), n = (i.value || "").trim().replace(/^#/, ""); if (!n) return; db.ajustes.listas = (db.ajustes.listas || []).filter(function (x) { return x !== n; }).concat([n]); touch("ajustes", "a", db.ajustes); pintar(); }
+  });
   document.addEventListener("click", function (e) { var el = e.target.closest("[data-a]"); if (!el) return; var f = A[el.dataset.a]; if (!f) return; if (el.type !== "checkbox") e.preventDefault(); e.stopPropagation(); f(el); });
   document.addEventListener("keydown", function (e) {
     if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches('[role="button"][data-a]')) { e.preventDefault(); e.target.click(); }
     if (e.key === "Enter" && e.target.id === "qa-t") { e.preventDefault(); A["qa-tarea"](); }
     if (e.key === "Escape" && !$("#modal").hidden) cerrar();
   });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter") return; var t = e.target;
+    if (t.classList && t.classList.contains("lad")) { var v = t.value.trim(), n = t.dataset.l; if (!v) return; e.preventDefault(); addTarea({ titulo: v.charAt(0).toUpperCase() + v.slice(1), lista: n }); pintar(); var again = $$(".lad").filter(function (x) { return x.dataset.l === n; })[0]; if (again) again.focus(); }
+    if (t.id === "nl-n") { e.preventDefault(); A.lnew(); }
+  });
   document.addEventListener("input", function (e) { if (e.target.id === "qa-t") parseQA(true); });
+  document.addEventListener("change", function (e) {
+    if (e.target.id === "dh-t") setDia(H.hoy(), null, e.target.value);
+    if (e.target.id === "aj-cierre") { db.ajustes.cierre = e.target.value; touch("ajustes", "a", db.ajustes); }
+    if (e.target.id === "qa-a") parseQA(false);
+  });
   document.addEventListener("change", function (e) { if (e.target.id === "qa-f" || e.target.id === "qa-h") parseQA(false); });
   $("#fab").addEventListener("click", function () { A.fab(); });
+
+(function () {
+    var y0 = null, dy = 0, caja = null, m = $("#modal");
+    m.addEventListener("touchstart", function (e) { caja = e.target.closest(".caja"); if (!caja || caja.scrollTop > 0) { caja = null; return; } y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
+    m.addEventListener("touchmove", function (e) { if (!caja || y0 == null) return; dy = e.touches[0].clientY - y0; if (dy > 0) { caja.style.transition = "none"; caja.style.transform = "translateY(" + dy + "px)"; } else dy = 0; }, { passive: true });
+    m.addEventListener("touchend", function () { if (!caja) return; if (dy > 110) cerrar(); else { caja.style.transition = "transform .2s"; caja.style.transform = ""; } y0 = null; dy = 0; caja = null; });
+  })();
 
   /* ---------- arranque ---------- */
   function boot() {

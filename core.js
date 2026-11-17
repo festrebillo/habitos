@@ -79,7 +79,22 @@
     { c: "Cuerpo", n: "Sin azúcar ni alcohol", e: "🚫", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Menos antojos, mejor sueño" },
     { c: "Noche", n: "Preparar el día de mañana", e: "📝", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Dormir tranquilo y arrancar sin dudas" },
     { c: "Noche", n: "Apagar pantallas antes de dormir", e: "🌙", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Una hora sin pantallas para dormir mejor" },
-    { c: "Noche", n: "Dormir 7 a 8 horas", e: "😴", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "La base de todo lo demás" }
+    { c: "Noche", n: "Dormir 7 a 8 horas", e: "😴", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "La base de todo lo demás" },
+    { c: "Aprendizaje", n: "Estudiar un idioma (una lección)", e: "🗣️", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Constancia diaria: poco, pero todos los días" },
+    { c: "Aprendizaje", n: "Escuchar un podcast educativo", e: "🎧", tipo: "cant", meta: 20, un: "min", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Aprender mientras te mueves o cocinas" },
+    { c: "Aprendizaje", n: "Practicar un instrumento o habilidad", e: "🎸", tipo: "cant", meta: 20, un: "min", frec: { t: "sem", n: 5 }, d: "La práctica corta y frecuente gana a la larga" },
+    { c: "Aprendizaje", n: "Leer noticias de mi sector", e: "📰", tipo: "cant", meta: 10, un: "min", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Estar al día sin perder la mañana" },
+    { c: "Aprendizaje", n: "Anotar una idea o lo aprendido hoy", e: "💡", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Lo que no se anota, se olvida" },
+    { c: "Relaciones", n: "Llamar o escribir a un familiar", e: "📞", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 3 }, d: "Cuidar a los tuyos" },
+    { c: "Relaciones", n: "Agradecer o felicitar a alguien", e: "💌", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 3 }, d: "Pequeños gestos que fortalecen vínculos" },
+    { c: "Relaciones", n: "Comer sin pantallas", e: "🍽️", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Presencia con quien te acompaña" },
+    { c: "Bienestar", n: "Respiración consciente", e: "🌬️", tipo: "cant", meta: 5, un: "min", frec: { t: "dia" }, d: "Bajar el ritmo en medio del día" },
+    { c: "Bienestar", n: "Salir a la luz natural", e: "☀️", tipo: "cant", meta: 15, un: "min", frec: { t: "dia" }, d: "Mejor ánimo y mejor sueño" },
+    { c: "Bienestar", n: "Pausa activa en el trabajo", e: "🧍", tipo: "cant", meta: 3, un: "pausas", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Levantarte y moverte cada par de horas" },
+    { c: "Bienestar", n: "Limitar redes a 30 minutos", e: "📵", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Recuperar tiempo para lo importante" },
+    { c: "Finanzas", n: "Anotar mis gastos del día", e: "🧾", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Saber a dónde va tu dinero" },
+    { c: "Finanzas", n: "Ahorrar antes de gastar", e: "🏦", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 1 }, d: "Pagarte primero a ti" },
+    { c: "Finanzas", n: "Revisión mensual de metas", e: "📆", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 1 }, d: "Ajustar el rumbo con tiempo" }
   ];
   function mejorRacha(h, db, hasta) {   // la racha más larga de toda la historia del hábito
     var ini = h.ini || hasta, best = 0, cur = 0, t = h.frec && h.frec.t || "dia", d, g = 0;

@@ -1,7 +1,7 @@
 /* Hábitos · hábitos con meta, pendientes, calendario (Google Calendar) y avisos dentro de la app. Los datos van a tu hoja «Fergard · Hábitos». */
 (function () {
   "use strict";
-  var CFG = window.FG_CFG || {}, VERSION = "0.5.0", DB_KEY = "habitos_db", H = window.HCore;
+  var CFG = window.FG_CFG || {}, VERSION = "0.5.1", DB_KEY = "habitos_db", H = window.HCore;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var LS = (function () { try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); return localStorage; } catch (e) { var m = {}; return { getItem: function (k) { return m[k] || null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } }; } })();

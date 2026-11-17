@@ -195,3 +195,8 @@ select{height:50px}
 .fila.t.p3,.ti.p3{background:#EDE6FA}
 .pill.n3,.pill.imp{background:#E4D9F7;color:#4B2A8A}
 .fila.t .pill.n3,.fila.t .pill.imp{background:#D8C9F2;color:#4B2A8A}
+
+/* v0.6.2: el texto de fecha y hora queda centrado verticalmente en iPhone */
+input[type=date],input[type=time]{padding:0 14px;line-height:normal;display:flex;align-items:center;justify-content:center}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{margin:0;min-height:1.4em;display:flex;align-items:center;justify-content:center;text-align:center}
+input[type=date]::-webkit-datetime-edit,input[type=time]::-webkit-datetime-edit{padding:0;line-height:1.4}

@@ -1,7 +1,7 @@
 /* Hábitos · hábitos con meta, pendientes, calendario (Google Calendar) y avisos dentro de la app. Los datos van a tu hoja «Fergard · Hábitos». */
 (function () {
   "use strict";
-  var CFG = window.FG_CFG || {}, VERSION = "0.5.2", DB_KEY = "habitos_db", H = window.HCore;
+  var CFG = window.FG_CFG || {}, VERSION = "0.6.0", DB_KEY = "habitos_db", H = window.HCore;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var LS = (function () { try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); return localStorage; } catch (e) { var m = {}; return { getItem: function (k) { return m[k] || null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } }; } })();
@@ -106,7 +106,7 @@
     var id = esc(t.id), subs = t.sub && t.sub.length ? '<span class="pill">' + t.sub.filter(function (s) { return s.ok; }).length + "/" + t.sub.length + " pasos</span>" : "";
     var atras = !t.ok && t.f && t.f < H.hoy() ? '<span class="pill alta">Atrasada</span>' : "";
     var st = atras + pri(t) + (t.rep ? '<span class="pill">🔁</span>' : "") + (t.l ? '<span class="pill">#' + esc(t.l) + "</span>" : "") + subs + (conFecha && t.f ? '<span class="pill">' + esc(fRel(t.f)) + "</span>" : "") + (t.nota ? esc(t.nota.slice(0, 40)) : "");
-    return '<div class="fila t' + (t.ok ? " ok" : "") + (!t.ok && nivel(t) <= 2 ? " u u" + nivel(t) : "") + '" role="button" tabindex="0" data-a="tedit" data-id="' + id + '"><div class="hora">' + esc(t.h || "") + '</div><div class="tx"><div class="tt">' + esc(t.t) + "</div>" + (st ? '<div class="st">' + st + "</div>" : "") + '</div><div class="cbw"><button class="cb' + (t.ok ? " on" : "") + '" data-a="tchk" data-id="' + id + '" aria-label="' + (t.ok ? "Desmarcar " : "Completar ") + esc(t.t) + '" aria-pressed="' + !!t.ok + '">' + ico("chk") + "</button></div></div>";
+    return '<div class="fila t' + (t.ok ? " ok" : "") + (!t.ok && nivel(t) <= 2 ? " u u" + nivel(t) : "") + (!t.ok && nivel(t) !== 4 ? " p" + nivel(t) : "") + '" role="button" tabindex="0" data-a="tedit" data-id="' + id + '"><div class="hora">' + esc(t.h || "") + '</div><div class="tx"><div class="tt">' + esc(t.t) + "</div>" + (st ? '<div class="st">' + st + "</div>" : "") + '</div><div class="cbw"><button class="cb' + (t.ok ? " on" : "") + '" data-a="tchk" data-id="' + id + '" aria-label="' + (t.ok ? "Desmarcar " : "Completar ") + esc(t.t) + '" aria-pressed="' + !!t.ok + '">' + ico("chk") + "</button></div></div>";
   }
   function filaEv(e) {
     return '<div class="fila t"><div class="hora">' + (e.td ? "Todo<br>el día" : esc(e.i.slice(11))) + '</div><div class="tx"><div class="tt">' + esc(e.t) + '</div><div class="st"><span class="pill cal">Google Calendar</span>' + (e.l ? esc(e.l) : "") + "</div></div></div>";
@@ -215,7 +215,12 @@
   }
   /* ---- diario, metas, listas, cierre y revisión ---- */
   var MOODS = ["😞", "🙁", "😐", "🙂", "😄"], PAL = ["#1E2F57", "#B45309", "#2F6B4F", "#6D28D9", "#B3261E", "#0E7490"];
-  function setDia(f, a, t) { var d = db.diario[f] || { f: f }; if (a != null) d.a = a; if (t != null) d.t = t; if (!d.a && !(d.t || "").trim()) { if (db.diario[f]) quitar("diario", f); } else { db.diario[f] = d; touch("diario", f, d); } }
+  function dDoc(f) { return db.diario[f] || { f: f }; }
+  function diaVacio(d) {
+    return !d.a && !(d.t || "").trim() && !(d.top && d.top.length) && !(d.g && d.g.some(function (x) { return (x || "").trim(); })) && !(d.man || "").trim() && !(d.reg && Object.keys(d.reg).some(function (k) { return d.reg[k] !== undefined && d.reg[k] !== ""; }));
+  }
+  function guardarDia(d) { if (diaVacio(d)) { if (db.diario[d.f]) quitar("diario", d.f); } else { db.diario[d.f] = d; touch("diario", d.f, d); } }
+  function setDia(f, a, t) { var d = dDoc(f); if (a != null) d.a = a; if (t != null) d.t = t; guardarDia(d); }
   function moods(sel, act) { return '<div class="moods" role="group" aria-label="¿Cómo te sentiste?">' + MOODS.map(function (m, i) { return '<button class="' + (sel === i + 1 ? "on" : "") + '" data-a="' + act + '" data-v="' + (i + 1) + '" aria-label="Ánimo ' + (i + 1) + ' de 5" aria-pressed="' + (sel === i + 1) + '">' + m + "</button>"; }).join("") + "</div>"; }
   function segHab() { return '<div class="seg"><button class="' + (S.hv === "hab" ? "on" : "") + '" data-a="hv" data-v="hab">Hábitos</button><button class="' + (S.hv === "rachas" ? "on" : "") + '" data-a="hv" data-v="rachas">Rachas</button><button class="' + (S.hv === "metas" ? "on" : "") + '" data-a="hv" data-v="metas">Metas</button></div>'; }
   function segPend() { return '<div class="seg"><button class="' + (S.pv === "fecha" ? "on" : "") + '" data-a="pv" data-v="fecha">Por fecha</button><button class="' + (S.pv === "lista" ? "on" : "") + '" data-a="pv" data-v="lista">Por lista</button></div>'; }
@@ -251,7 +256,19 @@
       '<div class="dup"><div><label class="lbl" for="me-o">Objetivo</label><input id="me-o" type="number" inputmode="decimal" min="1" value="' + esc(d.obj) + '"></div><div><label class="lbl" for="me-f">Fecha límite (opcional)</label><input id="me-f" type="date" value="' + esc(d.fin || "") + '"></div></div><button class="btn" data-a="msave">Guardar</button>' + (d.id ? '<button class="btn bad" data-a="mdel">Eliminar</button>' : ""));
   }
   function leerME() { var d = S.me; if (!d || !$("#me-n")) return; d.n = $("#me-n").value; d.e = $("#me-e").value.trim() || "🎯"; d.obj = +$("#me-o").value || 1; d.fin = $("#me-f").value; if ($("#me-h")) { d.hab = $("#me-h").value; d.ini = $("#me-i").value || H.hoy(); } if ($("#me-u")) d.un = $("#me-u").value.trim(); if ($("#me-a")) d.act = +$("#me-a").value || 0; }
-  function nombresListas() { var o = {}; (db.ajustes.listas || []).forEach(function (l) { o[l] = 1; }); listaTar().forEach(function (t) { if (t.l) o[t.l] = 1; }); return Object.keys(o).sort(); }
+  var LISTAS_BASE = ["Trabajo", "Casa", "Personales", "Otros"];
+  function opcionesListas(sel) {
+    var o = {}, extra = []; listaTar().forEach(function (t) { if (t.l && t.l !== "Notas" && LISTAS_BASE.indexOf(t.l) < 0) o[t.l] = 1; }); (db.ajustes.listas || []).forEach(function (l) { if (LISTAS_BASE.indexOf(l) < 0) o[l] = 1; }); if (sel && LISTAS_BASE.indexOf(sel) < 0) o[sel] = 1;
+    extra = Object.keys(o).sort();
+    return '<option value="">Sin lista</option>' + LISTAS_BASE.concat(extra).map(function (l) { return '<option value="' + esc(l) + '"' + (sel === l ? " selected" : "") + ">" + esc(l) + "</option>"; }).join("");
+  }
+  function selLista(nombre) {
+    var s2 = $("#qa-l"); if (!s2 || !nombre) return; var q = M2(nombre), i;
+    for (i = 0; i < s2.options.length; i++) if (M2(s2.options[i].value) === q) { s2.value = s2.options[i].value; return; }
+    s2.add(new Option(nombre, nombre)); s2.value = nombre;
+  }
+  function M2(x) { return H.norm(x); }
+  function nombresListas() { var o = {}; LISTAS_BASE.forEach(function (l) { o[l] = 1; }); (db.ajustes.listas || []).forEach(function (l) { o[l] = 1; }); listaTar().forEach(function (t) { if (t.l) o[t.l] = 1; }); return Object.keys(o).sort(); }
   function colLista(n) { var h = 0; for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return PAL[h % PAL.length]; }
   function vPendLista() {
     var nombres = nombresListas().concat([""]), html = "";
@@ -263,18 +280,99 @@
     });
     return cab("Pendientes", "Tus listas") + segPend() + '<div class="ladd" style="margin-bottom:12px;padding:0"><input id="nl-n" placeholder="Nueva lista (Compras, Casa, Viaje…)" enterkeyhint="done" aria-label="Nueva lista"></div>' + (html || '<div class="vacio"><b>Sin listas todavía</b>Crea una arriba, por ejemplo «Compras», y añade cosas con casilla.</div>');
   }
+  /* ---- Mis 3 prioridades ---- */
+  function vTop() {
+    var f = H.hoy(), d = db.diario[f] || {}, top = d.top || [], ayer = db.diario[H.addD(f, -1)] || {}, plan = ayer.man, h = "";
+    if (plan && !top.some(function (x) { return x.t === plan; })) h += '<div class="plan"><b>🌙 Lo que planeaste anoche</b><span>' + esc(plan) + '</span><button data-a="topplan">Añadir a mis 3</button></div>';
+    h += '<div class="sec"><span>Mis 3 prioridades</span><button data-a="topedit">' + (top.length ? "Editar" : "Elegir") + "</button></div>";
+    if (!top.length) return h + '<div class="lista"><div class="vacio" style="padding:18px"><b>¿Qué tiene que salir hoy?</b>Elige tus 3 cosas más importantes del día.</div></div>';
+    var todas = top.every(function (x) { return x.ok; });
+    return h + '<div class="lista">' + top.map(function (x, i) { return '<div class="fila top' + (x.ok ? " ok" : "") + '"><button class="cb lg' + (x.ok ? " on" : "") + '" data-a="toptg" data-i="' + i + '" aria-pressed="' + !!x.ok + '" aria-label="' + (x.ok ? "Desmarcar " : "Completar ") + esc(x.t) + '">' + ico("chk") + '</button><div class="tx"><div class="tt" style="white-space:normal">' + esc(x.t) + "</div></div></div>"; }).join("") + "</div>" + (todas ? '<div class="ganado">✅ ¡Día ganado! Cumpliste tus 3 prioridades.</div>' : "");
+  }
+  function topEditor() {
+    var f = H.hoy(), d = db.diario[f] || {}, top = d.top || [], cand = listaTar().filter(function (t) { return !t.ok && t.l !== "Notas" && t.f && t.f <= f; }).sort(function (a, b) { return nivel(a) - nivel(b); }).slice(0, 6);
+    S.topids = {}; top.forEach(function (x, i) { if (x.id) S.topids[i] = x.id; });
+    abrir('<h3>Mis 3 prioridades</h3><div class="st" style="color:var(--mut);font-weight:600;line-height:1.4;margin:-4px 0 6px">Lo que tiene que salir hoy, sí o sí. Escríbelas o tómalas de tus pendientes.</div>' + [0, 1, 2].map(function (i) { return '<label class="lbl" for="tp' + i + '">Prioridad ' + (i + 1) + '</label><input id="tp' + i + '" placeholder="Escribe aquí…" value="' + esc(top[i] ? top[i].t : "") + '">'; }).join("") +
+      (cand.length ? '<div class="lbl">De tus pendientes</div><div class="lista">' + cand.map(function (t) { return '<div class="fila" role="button" tabindex="0" data-a="topcand" data-id="' + esc(t.id) + '"><div class="tx"><div class="tt" style="white-space:normal">' + esc(t.t) + '</div><div class="st">' + esc(fRel(t.f)) + " " + pri(t) + '</div></div><span class="pill cal">+ Usar</span></div>'; }).join("") + "</div>" : "") + '<button class="btn" data-a="topsave">Guardar</button>');
+  }
+  /* ---- Registros rápidos ---- */
+  var REGS = { agua: { n: "Agua", u: "vasos", e: "💧", paso: 1, meta: 8 }, sueno: { n: "Sueño", u: "h", e: "😴", paso: 0.5, meta: 8 }, energia: { n: "Energía", u: "/5", e: "⚡", niv: true }, peso: { n: "Peso", u: "kg", e: "⚖️", ent: true }, pasos: { n: "Pasos", u: "", e: "👣", ent: true } };
+  function regsAct() { return db.ajustes.regs || ["agua", "sueno", "energia"]; }
+  function regVal(f, k) { var d = db.diario[f]; return d && d.reg && d.reg[k] !== undefined ? d.reg[k] : null; }
+  function setReg(f, k, v) { var d = dDoc(f); d.reg = d.reg || {}; if (v === null || v === "" || isNaN(v)) delete d.reg[k]; else d.reg[k] = v; guardarDia(d); }
+  function spark(k) {
+    var f = H.hoy(), vals = [], mx = 0, i; for (i = 6; i >= 0; i--) { var v = regVal(H.addD(f, -i), k); vals.push(v); if (v && v > mx) mx = v; }
+    return '<span class="spark" aria-hidden="true">' + vals.map(function (v) { return '<i style="height:' + (v && mx ? Math.max(12, Math.round(100 * v / mx)) : 6) + '%"' + (v ? "" : ' class="v"') + "></i>"; }).join("") + "</span>";
+  }
+  function vRegistros() {
+    var f = H.hoy(), h = '<div class="sec"><span>Registros rápidos</span><button data-a="regcfg">Elegir</button></div><div class="lista">';
+    var act = regsAct().filter(function (k) { return REGS[k]; });
+    if (!act.length) return h + '<div class="vacio">Elige qué quieres registrar: agua, sueño, energía, peso o pasos.</div></div>';
+    act.forEach(function (k) {
+      var r = REGS[k], v = regVal(f, k), ctl;
+      if (r.niv) ctl = '<div class="niv" role="group" aria-label="Energía de 1 a 5">' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="' + (v === n ? "on" : "") + '" data-a="rge" data-k="' + k + '" data-v="' + n + '" aria-pressed="' + (v === n) + '">' + n + "</button>"; }).join("") + "</div>";
+      else if (r.ent) ctl = '<input class="rgin" data-k="' + k + '" type="number" inputmode="decimal" step="any" min="0" value="' + (v === null ? "" : v) + '" placeholder="' + (k === "peso" ? "kg" : "pasos") + '" aria-label="' + r.n + '">';
+      else ctl = '<div class="cant"><button data-a="rgm" data-k="' + k + '" aria-label="Quitar">−</button><div class="v">' + (v === null ? 0 : v) + "<small>" + r.u + '</small></div><button class="mas" data-a="rgp" data-k="' + k + '" aria-label="Sumar">+</button></div>';
+      h += '<div class="fila rg"><div class="em">' + r.e + '</div><div class="tx"><div class="tt">' + r.n + (r.meta && v !== null && v >= r.meta ? " ✓" : "") + "</div>" + spark(k) + "</div>" + ctl + "</div>";
+    });
+    return h + "</div>";
+  }
+  /* ---- Gratitud, notas rápidas y plan de mañana ---- */
+  function vGrat() {
+    var d = db.diario[H.hoy()] || {}, g = d.g || [];
+    return '<div class="sec"><span>3 cosas buenas de hoy</span></div><div class="lista" style="padding:12px">' + [0, 1, 2].map(function (i) { return '<input class="gin" id="g-' + i + '" placeholder="' + ["Algo que agradezco…", "Algo que salió bien…", "Algo que me hizo sonreír…"][i] + '" value="' + esc(g[i] || "") + '" aria-label="Cosa buena ' + (i + 1) + '" style="margin-bottom:' + (i < 2 ? 8 : 0) + 'px">'; }).join("") + "</div>";
+  }
+  function vNotas() {
+    var ns = listaTar().filter(function (t) { return t.l === "Notas" && !t.ok; }).sort(function (a, b) { return (b.upd || 0) - (a.upd || 0); }).slice(0, 5);
+    return '<div class="sec"><span>Notas e ideas rápidas</span></div><div class="lista"><div style="padding:12px"><input id="nt-t" placeholder="Anota una idea y pulsa Enter…" enterkeyhint="done" aria-label="Nota rápida"></div>' + ns.map(function (t) { return filaTar(t); }).join("") + "</div>" + (ns.length ? '<div class="st" style="color:var(--mut);font-weight:600;font-size:12.5px;margin:6px 2px 0">Toca una nota para ponerle fecha y convertirla en pendiente.</div>' : "");
+  }
+  function vPlan() {
+    var d = db.diario[H.hoy()] || {};
+    return '<div class="sec"><span>🌙 Plan de mañana</span></div><div class="lista" style="padding:12px"><input id="pm-t" placeholder="Lo único importante de mañana…" value="' + esc(d.man || "") + '" aria-label="Lo único importante de mañana"><div class="st" style="color:var(--mut);font-weight:600;font-size:12.5px;margin-top:6px">Mañana te lo recordaré al abrir la app.</div></div>';
+  }
+  function diasSin(h) { var f = H.hoy(), n = 0, i; for (i = 1; i <= 14; i++) { var d = H.addD(f, -i); if (!H.programado(h, d)) continue; if (H.cumplido(h, H.valor(db, h.id, d))) return n; n++; } return n; }
+  function vSug() {
+    var f = H.hoy(), c = listaHab().filter(function (h) { return !h.arch && H.programado(h, f) && !H.cumplido(h, H.valor(db, h.id, f)); }).map(function (h) { return { h: h, n: diasSin(h) }; }).sort(function (a, b) { return b.n - a.n; })[0];
+    if (!c || c.n < 2) return "";
+    return '<div class="sug"><b>💡 Sugerencia del día</b><span>Llevas ' + c.n + ' días sin «' + esc(c.h.n) + '». ¿Lo haces hoy?</span><button data-a="sugir" data-id="' + esc(c.h.id) + '">' + (c.h.tipo === "cant" ? "Registrar ahora" : "Marcar como hecho") + "</button></div>";
+  }
+  function vFechas() {
+    var f = H.hoy(), lim = H.addD(f, 30), ev = S.ev.filter(function (e) { var d = e.i.slice(0, 10); return d >= f && d <= lim && /cumple|aniversario|birthday/i.test(e.t); }).sort(function (a, b) { return a.i < b.i ? -1 : 1; }).slice(0, 4);
+    if (!ev.length) return "";
+    return '<div class="sec"><span>Fechas importantes</span></div><div class="lista">' + ev.map(function (e) { var d = e.i.slice(0, 10), n = Math.round((H.pf(d) - H.pf(f)) / 86400000); return '<div class="fila"><div class="em">🎂</div><div class="tx"><div class="tt" style="white-space:normal">' + esc(e.t) + '</div><div class="st">' + (n === 0 ? "¡Hoy!" : n === 1 ? "Mañana" : "En " + n + " días") + " · " + esc(fCorto(d)) + "</div></div></div>"; }).join("") + "</div>";
+  }
   function vHoy() {
     var h = vHoy0(), f = H.hoy(), pr = listaTar().filter(function (t) { return !t.ok && t.f === f && nivel(t) <= 2; }).map(function (t) { return filaTar(t); }).join("");
+    h = h.replace('<div class="sec"><span>Mis hábitos</span></div>', vTop() + '<div class="sec"><span>Mis hábitos</span></div>');
     if (pr) h = h.replace('<div class="sec"><span>Agenda de hoy</span>', bloque("Prioridades de hoy", pr, "") + '<div class="sec"><span>Agenda de hoy</span>');
     var d = db.diario[f] || {};
-    return h + '<div class="sec"><span>Diario de hoy</span><button data-a="dsheet" data-f="' + f + '">Abrir</button></div><div class="lista" style="padding:14px">' + moods(d.a, "dm") + '<input id="dh-t" style="margin-top:10px" placeholder="Una línea sobre tu día…" value="' + esc(d.t || "") + '" aria-label="Una línea sobre tu día"></div><div class="dup"><button class="btn sec" data-a="enfoque">⏱ Modo enfoque</button><button class="btn sec" data-a="cierre">Cerrar el día</button></div>';
+    return h + vSug() + vRegistros() + vGrat() + vNotas() + vFechas() + vPlan() + '<div class="sec"><span>Diario de hoy</span><button data-a="dsheet" data-f="' + f + '">Abrir</button></div><div class="lista" style="padding:14px">' + moods(d.a, "dm") + '<input id="dh-t" style="margin-top:10px" placeholder="Una línea sobre tu día…" value="' + esc(d.t || "") + '" aria-label="Una línea sobre tu día"></div><div class="dup"><button class="btn sec" data-a="enfoque">⏱ Modo enfoque</button><button class="btn sec" data-a="cierre">Cerrar el día</button></div>';
+  }
+  /* ---- Conexiones entre tus hábitos y cómo te sientes ---- */
+  function conexiones() {
+    var f = H.hoy(), dias = [], i; for (i = 1; i <= 60; i++) dias.push(H.addD(f, -i));
+    var prom = function (a) { return a.reduce(function (x, y) { return x + y; }, 0) / a.length; }, out = [];
+    var mets = [{ n: "ánimo", g: function (d) { return d && d.a ? d.a : null; }, min: 0.5, u: "" }, { n: "horas de sueño", g: function (d) { return d && d.reg && d.reg.sueno != null ? d.reg.sueno : null; }, min: 0.5, u: " h" }, { n: "energía", g: function (d) { return d && d.reg && d.reg.energia != null ? d.reg.energia : null; }, min: 0.5, u: "" }];
+    listaHab().filter(function (h) { return !h.arch; }).forEach(function (h) {
+      mets.forEach(function (m) {
+        var a = [], b = []; dias.forEach(function (d) { if (!H.programado(h, d)) return; var v = m.g(db.diario[d]); if (v === null) return; (H.cumplido(h, H.valor(db, h.id, d)) ? a : b).push(v); });
+        if (a.length >= 4 && b.length >= 4) { var x = prom(a) - prom(b); if (Math.abs(x) >= m.min) out.push({ d: Math.abs(x), t: "Los días que cumples «" + h.n + "», tu " + m.n + " es " + prom(a).toFixed(1) + m.u + " frente a " + prom(b).toFixed(1) + m.u + " cuando no." }); }
+      });
+    });
+    var bien = [], mal = []; dias.forEach(function (d) { var x = db.diario[d]; if (x && x.a && x.reg && x.reg.sueno != null) (x.reg.sueno >= 7 ? bien : mal).push(x.a); });
+    if (bien.length >= 4 && mal.length >= 4 && Math.abs(prom(bien) - prom(mal)) >= 0.5) out.push({ d: Math.abs(prom(bien) - prom(mal)), t: "Cuando duermes 7 h o más, tu ánimo es " + prom(bien).toFixed(1) + " frente a " + prom(mal).toFixed(1) + " cuando duermes menos." });
+    out.sort(function (a, b) { return b.d - a.d; }); return out.slice(0, 4);
+  }
+  function vConex() {
+    var c = conexiones();
+    return '<div class="sec"><span>Conexiones que encontré</span></div>' + (c.length ? '<div class="lista">' + c.map(function (x) { return '<div class="fila"><div class="em">💡</div><div class="tx"><div class="tt" style="white-space:normal;font-weight:700;font-size:15px">' + esc(x.t) + "</div></div></div>"; }).join("") + "</div>" : '<div class="vacio"><b>Aún no hay suficientes datos</b>Registra tu ánimo y tu sueño unos 10 días y aquí aparecerán conexiones, por ejemplo cómo te sientes los días que entrenas.</div>');
   }
   function vPend() { return S.pv === "lista" ? vPendLista() : vPend0(); }
   function vHab() { return S.hv === "metas" ? vMetas(segHab()) : S.hv === "rachas" ? vRachas(segHab()) : vHab0(); }
   function vProg() {
-    var h = vProg0(), ds = Object.keys(db.diario).map(function (k) { return db.diario[k]; }).filter(function (d) { return !d.sem; }).sort(function (a, b) { return a.f < b.f ? 1 : -1; }).slice(0, 10);
+    var h = vProg0(), ds = Object.keys(db.diario).map(function (k) { return db.diario[k]; }).filter(function (d) { return !d.sem && (d.a || d.t); }).sort(function (a, b) { return a.f < b.f ? 1 : -1; }).slice(0, 10);
     h = h.replace('<div class="big">', semCard() + '<div class="dup"><button class="btn sec" data-a="revsem" style="margin-top:0">Revisión semanal</button><button class="btn sec" data-a="dsheet" data-f="' + H.hoy() + '" style="margin-top:0">Diario</button></div><div class="big" style="margin-top:12px">');
-    return h + (ds.length ? '<div class="sec"><span>Diario reciente</span></div><div class="lista">' + ds.map(function (d) { return '<div class="fila t" role="button" tabindex="0" data-a="dsheet" data-f="' + esc(d.f) + '"><div class="em">' + (MOODS[(d.a || 3) - 1]) + '</div><div class="tx"><div class="tt">' + esc(fRel(d.f)) + '</div><div class="st">' + esc(d.t || "") + "</div></div></div>"; }).join("") + "</div>" : "");
+    return h + vConex() + (ds.length ? '<div class="sec"><span>Diario reciente</span></div><div class="lista">' + ds.map(function (d) { return '<div class="fila t" role="button" tabindex="0" data-a="dsheet" data-f="' + esc(d.f) + '"><div class="em">' + (MOODS[(d.a || 3) - 1]) + '</div><div class="tx"><div class="tt">' + esc(fRel(d.f)) + '</div><div class="st">' + esc(d.t || "") + "</div></div></div>"; }).join("") + "</div>" : "");
   }
   function dSheet(f) {
     var d = db.diario[f] || {}; S.df = f;
@@ -330,7 +428,7 @@
     for (var i = 0; i < 7; i++) {
       var x = H.addD(l, i), its = [];
       evDia(x).forEach(function (e) { its.push({ k: e.td ? "00:00" : e.i.slice(11), h: '<div class="ti ev"><b>' + (e.td ? "Todo el día" : esc(e.i.slice(11))) + "</b>" + esc(e.t) + "</div>" }); });
-      tareasDe(x).forEach(function (t) { its.push({ k: t.h || "99:99", d: t.ok ? 1 : 0, h: '<div class="ti' + (t.ok ? " ok" : "") + (nivel(t) <= 2 && !t.ok ? " u" : "") + '" role="button" tabindex="0" data-a="tedit" data-id="' + esc(t.id) + '"><button class="cb mi' + (t.ok ? " on" : "") + '" data-a="tchk" data-id="' + esc(t.id) + '" aria-label="' + (t.ok ? "Desmarcar " : "Completar ") + esc(t.t) + '">' + ico("chk") + "</button><span>" + (t.h ? "<b>" + esc(t.h) + "</b>" : "") + esc(t.t) + "</span></div>" }); });
+      tareasDe(x).forEach(function (t) { its.push({ k: t.h || "99:99", d: t.ok ? 1 : 0, h: '<div class="ti' + (t.ok ? " ok" : "") + (nivel(t) <= 2 && !t.ok ? " u" : "") + (!t.ok && nivel(t) !== 4 ? " p" + nivel(t) : "") + '" role="button" tabindex="0" data-a="tedit" data-id="' + esc(t.id) + '"><button class="cb mi' + (t.ok ? " on" : "") + '" data-a="tchk" data-id="' + esc(t.id) + '" aria-label="' + (t.ok ? "Desmarcar " : "Completar ") + esc(t.t) + '">' + ico("chk") + "</button><span>" + (t.h ? "<b>" + esc(t.h) + "</b>" : "") + esc(t.t) + "</span></div>" }); });
       listaHab().forEach(function (h) { if (h.hora && H.programado(h, x)) its.push({ k: h.hora, h: '<div class="ti hb"><b>' + esc(h.hora) + "</b>" + esc((h.e || "") + " " + h.n) + "</div>" }); });
       its.sort(function (a, b) { return (a.d || 0) - (b.d || 0) || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0); });
       cols += '<div class="tcol' + (x === f ? " hoy" : "") + '"><button class="th" data-a="dia" data-f="' + x + '" aria-label="' + esc(fLargo(x)) + '"><span>' + H.DIAS[i].slice(0, 3) + "</span><b>" + H.pf(x).getDate() + "</b></button>" + (its.map(function (z) { return z.h; }).join("") || '<div class="te">Libre</div>') + "</div>";
@@ -427,14 +525,14 @@
   }
   function parseQA(deTexto) {
     var v = ($("#qa-t").value || ""), r = H.parsear(v, H.hoy()), fi = $("#qa-f"), hi = $("#qa-h");
-    var pr = $("#qa-pr"); if (deTexto !== false) { if (r.fecha) fi.value = r.fecha; if (r.hora) hi.value = r.hora; if (r.prioridad && pr) pr.value = String(r.prioridad === 2 ? 1 : 3); if (r.rep && $("#qa-r")) $("#qa-r").value = r.rep; } r.rep = $("#qa-r") ? $("#qa-r").value : r.rep; r.pr = pr ? (+pr.value || 4) : 4;
+    var pr = $("#qa-pr"); if (deTexto !== false) { if (r.fecha) fi.value = r.fecha; if (r.hora) hi.value = r.hora; if (r.prioridad && pr) pr.value = String(r.prioridad === 2 ? 1 : 3); if (r.rep && $("#qa-r")) $("#qa-r").value = r.rep; } r.rep = $("#qa-r") ? $("#qa-r").value : r.rep; if (deTexto !== false && r.lista && $("#qa-l")) selLista(r.lista); r.lista = $("#qa-l") ? $("#qa-l").value : r.lista; r.pr = pr ? (+pr.value || 4) : 4;
     r.fecha = fi.value || ""; r.hora = r.fecha ? (hi.value || "") : ""; r.av = r.hora ? (+($("#qa-a") && $("#qa-a").value) || 0) : 0; S.qa.r = r;
     var c = []; c.push(r.fecha ? "📅 " + fRel(r.fecha) : "Sin fecha (algún día)"); if (r.hora) c.push("🕒 " + r.hora); if (r.lista) c.push("#" + r.lista); if (r.rep) c.push("🔁 " + ({ dia: "Cada día", lab: "Lun–vie", sem: "Cada semana", mes: "Cada mes" }[r.rep] || "Se repite")); if (r.pr && r.pr !== 4) c.push(PRIN[r.pr]);
     $("#qa-p").innerHTML = c.map(function (x) { return '<span class="pill cal">' + esc(x) + "</span>"; }).join("");
   }
   function abrirAdd(f) {
     S.qa = { f: f || "", r: null };
-    abrir('<h3>Añadir</h3><input id="qa-t" placeholder="Llamar al dentista mañana 10am #salud !" autocomplete="off" autocapitalize="sentences" enterkeyhint="done"><div class="dup"><div><label class="lbl" for="qa-f">Fecha (puedes dejarla en blanco)</label><input id="qa-f" type="date" value="' + esc(S.qa.f || H.hoy()) + '"></div><div><label class="lbl" for="qa-h">Hora</label><input id="qa-h" type="time"></div></div><div class="chips" style="margin-top:8px"><button data-a="qa-fh" data-v="hoy">Hoy</button><button data-a="qa-fh" data-v="man">Mañana</button><button data-a="qa-fh" data-v="no">Sin fecha</button></div><label class="lbl" for="qa-pr">Prioridad</label><select id="qa-pr">' + PRIS.map(function (a) { return '<option value="' + a[0] + '"' + (a[0] === 4 ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") + '</select><label class="lbl" for="qa-a">Avisarme (si tiene hora)</label><select id="qa-a">' + AVISOS.map(function (a) { return '<option value="' + a[0] + '">' + a[1] + "</option>"; }).join("") + '</select><label class="lbl" for="qa-r">Repetir</label><select id="qa-r">' + REPS.map(function (a) { return '<option value="' + a[0] + '">' + a[1] + "</option>"; }).join("") + '</select><div class="parte" id="qa-p"></div><button class="btn" data-a="qa-tarea">Añadir pendiente</button><button class="btn sec" data-a="qa-evento">Crear evento en Google Calendar</button><button class="btn sec" data-a="hnew">Nuevo hábito</button><div class="vacio" style="padding:14px 4px 0;font-size:13px">Ejemplos: «pagar la luz hoy», «reunión con Laura el viernes 15:30», «comprar regalo en 3 días #casa». Con ! o «urgente» sube la prioridad. Si no pones fecha queda como «algún día» (por ejemplo una compra futura).</div>');
+    abrir('<h3>Añadir</h3><input id="qa-t" placeholder="Llamar al dentista mañana 10am #salud !" autocomplete="off" autocapitalize="sentences" enterkeyhint="done"><div class="dup fh"><div><label class="lbl" for="qa-f">Fecha (opcional)</label><input id="qa-f" type="date" value="' + esc(S.qa.f || H.hoy()) + '"></div><div><label class="lbl" for="qa-h">Hora</label><input id="qa-h" type="time"></div></div><div class="chips" style="margin-top:8px"><button data-a="qa-fh" data-v="hoy">Hoy</button><button data-a="qa-fh" data-v="man">Mañana</button><button data-a="qa-fh" data-v="no">Sin fecha</button></div><label class="lbl" for="qa-l">Lista</label><select id="qa-l">' + opcionesListas("") + '</select><label class="lbl" for="qa-pr">Prioridad</label><select id="qa-pr">' + PRIS.map(function (a) { return '<option value="' + a[0] + '"' + (a[0] === 4 ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") + '</select><label class="lbl" for="qa-a">Avisarme (si tiene hora)</label><select id="qa-a">' + AVISOS.map(function (a) { return '<option value="' + a[0] + '">' + a[1] + "</option>"; }).join("") + '</select><label class="lbl" for="qa-r">Repetir</label><select id="qa-r">' + REPS.map(function (a) { return '<option value="' + a[0] + '">' + a[1] + "</option>"; }).join("") + '</select><div class="parte" id="qa-p"></div><button class="btn" data-a="qa-tarea">Añadir pendiente</button><button class="btn sec" data-a="qa-evento">Crear evento en Google Calendar</button><button class="btn sec" data-a="hnew">Nuevo hábito</button><div class="vacio" style="padding:14px 4px 0;font-size:13px">Ejemplos: «pagar la luz hoy», «reunión con Laura el viernes 15:30», «comprar regalo en 3 días #casa». Con ! o «urgente» sube la prioridad. Si no pones fecha queda como «algún día» (por ejemplo una compra futura).</div>');
     parseQA(); setTimeout(function () { var i = $("#qa-t"); if (i) i.focus(); }, 60);
   }
   function crearEvento(t, f, h) {
@@ -450,7 +548,7 @@
     var t = db.tareas[id]; if (!t) return; S.td = id;
     var listas = {}; listaTar().forEach(function (x) { if (x.l) listas[x.l] = 1; });
     abrir('<h3>Pendiente</h3><label class="lbl" for="te-t">Título</label><input id="te-t" value="' + esc(t.t) + '"><div class="dup"><div><label class="lbl" for="te-f">Fecha</label><input id="te-f" type="date" value="' + esc(t.f) + '"></div><div><label class="lbl" for="te-h">Hora</label><input id="te-h" type="time" value="' + esc(t.h) + '"></div></div>' +
-      '<div class="dup"><div><label class="lbl" for="te-l">Lista</label><input id="te-l" list="te-ls" value="' + esc(t.l) + '" placeholder="casa, trabajo…"><datalist id="te-ls">' + Object.keys(listas).map(function (l) { return '<option value="' + esc(l) + '">'; }).join("") + '</datalist></div><div><label class="lbl" for="te-p">Prioridad</label><select id="te-p">' + PRIS.map(function (a) { return '<option value="' + a[0] + '"' + (nivel(t) === a[0] ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") + "</select></div></div>" + '<label class="lbl" for="te-a">Avisarme (si tiene hora)</label><select id="te-a">' + AVISOS.map(function (a) { return '<option value="' + a[0] + '"' + ((t.av || 0) === a[0] ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") + "</select>" + '<label class="lbl" for="te-r">Repetir</label><select id="te-r">' + REPS.map(function (a) { return '<option value="' + a[0] + '"' + ((t.rep || "") === a[0] ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") + "</select>" +
+      '<div class="dup"><div><label class="lbl" for="te-l">Lista</label><select id="te-l">' + opcionesListas(t.l) + '</select></div><div><label class="lbl" for="te-p">Prioridad</label><select id="te-p">' + PRIS.map(function (a) { return '<option value="' + a[0] + '"' + (nivel(t) === a[0] ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") + "</select></div></div>" + '<label class="lbl" for="te-a">Avisarme (si tiene hora)</label><select id="te-a">' + AVISOS.map(function (a) { return '<option value="' + a[0] + '"' + ((t.av || 0) === a[0] ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") + "</select>" + '<label class="lbl" for="te-r">Repetir</label><select id="te-r">' + REPS.map(function (a) { return '<option value="' + a[0] + '"' + ((t.rep || "") === a[0] ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") + "</select>" +
       '<label class="lbl">Pasos</label><div id="te-s">' + (t.sub || []).map(subHtml).join("") + '</div><button class="btn sec" data-a="tsubadd" style="height:44px;margin-top:4px">+ Añadir paso</button><label class="lbl" for="te-n">Nota</label><textarea id="te-n" rows="2">' + esc(t.nota || "") + '</textarea>' +
       '<button class="btn" data-a="tsave">Guardar</button><div class="dup"><button class="btn sec" data-a="tmanana">Postergar 1 día</button><button class="btn sec" data-a="tcal">A Google Calendar</button></div><button class="btn bad" data-a="tdel">Borrar</button>');
   }
@@ -640,6 +738,26 @@
     Promise.resolve().then(function () { return window.caches ? caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }) : null; })
       .then(function () { return navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }) : null; }).then(fin, fin);
   } });
+  Object.assign(A, {
+    rgp: function (el) { var k = el.dataset.k, r = REGS[k], v = regVal(H.hoy(), k) || 0; setReg(H.hoy(), k, Math.round((v + r.paso) * 10) / 10); pintar(); },
+    rgm: function (el) { var k = el.dataset.k, r = REGS[k], v = regVal(H.hoy(), k) || 0; setReg(H.hoy(), k, Math.max(0, Math.round((v - r.paso) * 10) / 10)); pintar(); },
+    rge: function (el) { var k = el.dataset.k, v = +el.dataset.v; setReg(H.hoy(), k, regVal(H.hoy(), k) === v ? null : v); pintar(); },
+    regcfg: function () { var act = regsAct(); abrir('<h3>¿Qué quieres registrar?</h3><div class="st" style="color:var(--mut);font-weight:600;margin:-4px 0 6px">Elige los que te sirvan; el resto no aparece.</div>' + Object.keys(REGS).map(function (k) { return '<label class="sw"><input type="checkbox" data-a="regtog" data-k="' + k + '"' + (act.indexOf(k) >= 0 ? " checked" : "") + "> " + REGS[k].e + " " + REGS[k].n + (REGS[k].u ? " (" + REGS[k].u + ")" : "") + "</label>"; }).join("") + '<button class="btn" data-a="mcerrar">Listo</button>'); },
+    regtog: function (el) { var a = regsAct().slice(), k = el.dataset.k, i = a.indexOf(k); if (el.checked && i < 0) a.push(k); if (!el.checked && i >= 0) a.splice(i, 1); db.ajustes.regs = a; touch("ajustes", "a", db.ajustes); pintar(); },
+    topedit: topEditor,
+    topcand: function (el) { var t = db.tareas[el.dataset.id]; if (!t) return; for (var i = 0; i < 3; i++) { var inp = $("#tp" + i); if (inp && !inp.value.trim()) { inp.value = t.t; S.topids[i] = t.id; return; } } toast("Ya tienes 3 prioridades; borra una para cambiarla"); },
+    topsave: function () {
+      var f = H.hoy(), d = dDoc(f), prev = d.top || [], nuevo = [];
+      [0, 1, 2].forEach(function (i) { var t = $("#tp" + i).value.trim(); if (!t) return; var viejo = prev.filter(function (x) { return x.t === t; })[0]; nuevo.push({ t: t, id: S.topids[i] || (viejo && viejo.id) || "", ok: !!(viejo && viejo.ok) }); });
+      d.top = nuevo; guardarDia(d); cerrar(); pintar(); toast(nuevo.length ? "Prioridades guardadas" : "Prioridades borradas");
+    },
+    toptg: function (el) {
+      var f = H.hoy(), d = dDoc(f), x = (d.top || [])[+el.dataset.i]; if (!x) return; x.ok = !x.ok; var t = x.id && db.tareas[x.id]; if (t && t.ok !== x.ok) completar(t, x.ok); guardarDia(d);
+      pintar(); if (d.top.length && d.top.every(function (y) { return y.ok; })) toast("¡Día ganado! ✅");
+    },
+    topplan: function () { var f = H.hoy(), d = dDoc(f), plan = (db.diario[H.addD(f, -1)] || {}).man; d.top = d.top || []; if (d.top.length >= 3) { toast("Ya tienes 3 prioridades: edita una para cambiarla"); return; } d.top.push({ t: plan, id: "", ok: false }); guardarDia(d); pintar(); toast("Añadido a tus prioridades"); },
+    sugir: function (el) { var h = db.habitos[el.dataset.id]; if (!h) return; if (h.tipo === "cant") { hDetalle(h.id); return; } setValor(h, H.hoy(), 1); pintar(); toast("¡Bien! «" + h.n + "» marcado"); }
+  });
   document.addEventListener("click", function (e) { var el = e.target.closest("[data-a]"); if (!el) return; var f = A[el.dataset.a]; if (!f) return; if (el.type !== "checkbox") e.preventDefault(); e.stopPropagation(); f(el); });
   document.addEventListener("keydown", function (e) {
     if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches('[role="button"][data-a]')) { e.preventDefault(); e.target.click(); }
@@ -650,12 +768,16 @@
     if (e.key !== "Enter") return; var t = e.target;
     if (t.classList && t.classList.contains("lad")) { var v = t.value.trim(), n = t.dataset.l; if (!v) return; e.preventDefault(); addTarea({ titulo: v.charAt(0).toUpperCase() + v.slice(1), lista: n }); pintar(); var again = $$(".lad").filter(function (x) { return x.dataset.l === n; })[0]; if (again) again.focus(); }
     if (t.id === "nl-n") { e.preventDefault(); A.lnew(); }
+    if (t.id === "nt-t") { var v = t.value.trim(); if (!v) return; e.preventDefault(); addTarea({ titulo: v.charAt(0).toUpperCase() + v.slice(1), lista: "Notas", fecha: "", hora: "", pr: 4 }); pintar(); toast("Nota guardada"); var n2 = $("#nt-t"); if (n2) n2.focus(); }
   });
   document.addEventListener("input", function (e) { if (e.target.id === "qa-t") parseQA(true); });
   document.addEventListener("change", function (e) {
     if (e.target.id === "dh-t") setDia(H.hoy(), null, e.target.value);
+    if (/^g-[0-2]$/.test(e.target.id)) { var dg = dDoc(H.hoy()); dg.g = dg.g || ["", "", ""]; dg.g[+e.target.id.slice(2)] = e.target.value.trim(); guardarDia(dg); }
+    if (e.target.id === "pm-t") { var dp = dDoc(H.hoy()); dp.man = e.target.value.trim(); guardarDia(dp); if (dp.man) toast("Plan de mañana guardado"); }
+    if (e.target.classList && e.target.classList.contains("rgin")) { var vv = e.target.value === "" ? null : +e.target.value; setReg(H.hoy(), e.target.dataset.k, vv); }
     if (e.target.id === "aj-cierre") { db.ajustes.cierre = e.target.value; touch("ajustes", "a", db.ajustes); }
-    if (e.target.id === "qa-a" || e.target.id === "qa-pr" || e.target.id === "qa-r") parseQA(false);
+    if (e.target.id === "qa-a" || e.target.id === "qa-pr" || e.target.id === "qa-r" || e.target.id === "qa-l") parseQA(false);
   });
   document.addEventListener("change", function (e) { if (e.target.id === "qa-f" || e.target.id === "qa-h") parseQA(false); });
   $("#fab").addEventListener("click", function () { A.fab(); });
@@ -672,7 +794,7 @@
     var vacio = !db.sync.ult && !Object.keys(db.habitos).length && !Object.keys(db.tareas).length; if (vacio && cfg().token) S.cargando = true;
     pintarTabs(); pintar();
     window.HB_DEBUG = { db: function () { return db; }, S: S, A: A, pintar: pintar, revisar: revisar, setEv: function (e) { S.ev = e; pintar(); } };
-    sync(false).then(function () { S.cargando = false; pintar(); cargarEv(H.hoy(), H.addD(H.hoy(), 1)); syncGym(); revisar(); buscarActualizacion(); });
+    sync(false).then(function () { S.cargando = false; pintar(); cargarEv(H.hoy(), H.addD(H.hoy(), 1)); syncGym(); revisar(); buscarActualizacion(); cargarEv(H.addD(H.hoy(), 2), H.addD(H.hoy(), 30)); });
     S.enf = enfLeer(); chipEnf(); setInterval(tickEnf, 1000);
     setInterval(function () { if (!document.hidden) { var h = H.hoy(); if (S.lastDay && S.lastDay !== h) { S.dia = h; pintar(); } S.lastDay = h; revisar(); } }, 30000); S.lastDay = H.hoy();
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});

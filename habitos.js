@@ -1,7 +1,7 @@
 /* Hábitos · hábitos con meta, pendientes, calendario (Google Calendar) y avisos dentro de la app. Los datos van a tu hoja «Fergard · Hábitos». */
 (function () {
   "use strict";
-  var CFG = window.FG_CFG || {}, VERSION = "0.8.0", DB_KEY = "habitos_db", H = window.HCore;
+  var CFG = window.FG_CFG || {}, VERSION = "0.9.0", DB_KEY = "habitos_db", H = window.HCore;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var LS = (function () { try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); return localStorage; } catch (e) { var m = {}; return { getItem: function (k) { return m[k] || null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } }; } })();
@@ -146,7 +146,7 @@
     var f = H.hoy(), r = H.resumenDia(db, f), l = H.lunes(f), hs = listaHab().filter(function (h) { return H.programado(h, f); }), sem = "";
     for (var i = 0; i < 7; i++) { var d = H.addD(l, i), rd = H.resumenDia(db, d), pc = d > f || !rd.tot ? 0 : Math.round(100 * rd.ok / rd.tot); sem += '<div class="' + (d === f ? "hoy" : "") + '"><b><i style="height:' + pc + '%"></i></b>' + H.DIAS[i].charAt(0).toUpperCase() + "</div>"; }
     var pcH = r.tot ? Math.round(100 * r.ok / r.tot) : 0;
-    var h = '<div class="hero"><div class="hr"><div><div class="t">Hábitos de hoy</div><div class="n">' + r.ok + "<small> de " + r.tot + ' hechos</small></div><div class="msg">' + esc(mensaje(r)) + "</div></div>" + ring(pcH, r.ok + "/" + r.tot, 80, false) + '</div><div class="sem" aria-hidden="true">' + sem + "</div></div>";
+    var h = '<div class="hero"><div class="hr"><div><div class="t">Hábitos de hoy</div><div class="n">' + r.ok + "<small> de " + r.tot + ' hechos</small></div><div class="msg">' + esc(mensaje(r)) + "</div></div>" + ring(pcH, r.ok + "/" + r.tot, 84, true) + '</div><div class="sem" aria-hidden="true">' + sem + "</div></div>";
     var vac = '<div class="vacio"><b>Aún no tienes hábitos para hoy</b>Crea el primero: leer 10 páginas, beber agua, caminar…</div><button class="btn" data-a="hnew">Crear un hábito</button><button class="btn sec" data-a="hideas">💡 Ideas de hábitos de personas exitosas</button>';
     var at = atrasadas(), atH = at.map(function (t) { return filaTar(t, true); }).join("");
     return cab("Hoy", fLargo(f)) + h + '<div class="sec"><span>Mis hábitos</span></div>' + (hs.length ? '<div class="lista">' + hs.map(function (x) { return filaHab(x, f); }).join("") + '</div><button class="dash" data-a="hnew">+ Nuevo hábito</button>' : vac) +

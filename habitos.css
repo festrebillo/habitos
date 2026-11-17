@@ -190,3 +190,8 @@ input[type=date],input[type=time]{height:50px;min-height:50px;line-height:24px;p
 select{height:50px}
 
 .fila.t .pill.n1{background:#F8C7C2}.fila.t .pill.n2{background:#FFD3AE}.fila.t .pill.n3,.fila.t .pill.imp{background:#FFE49A}.fila.t .pill.n5{background:#CBD9F0}
+
+/* v0.6.1: nivel 3 (Importante) en lila en vez de ámbar */
+.fila.t.p3,.ti.p3{background:#EDE6FA}
+.pill.n3,.pill.imp{background:#E4D9F7;color:#4B2A8A}
+.fila.t .pill.n3,.fila.t .pill.imp{background:#D8C9F2;color:#4B2A8A}

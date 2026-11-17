@@ -93,6 +93,12 @@
     for (var i = 1; i <= 7; i++) if (c[i] > best) { best = c[i]; bd = i; }
     return bd;
   }
+  function siguiente(f, rep) {   // próxima fecha de una tarea que se repite
+    if (rep === "dia") return addD(f, 1); if (rep === "sem") return addD(f, 7);
+    if (rep === "lab") { var n = addD(f, 1); while (dow(n) > 5) n = addD(n, 1); return n; }
+    if (rep === "mes") { var d = pf(f), m = new Date(d.getFullYear(), d.getMonth() + 1, 1), ult = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate(); m.setDate(Math.min(d.getDate(), ult)); return fstr(m); }
+    return "";
+  }
   function textoFrec(h) { var f = h.frec || { t: "dia" }; if (f.t === "dias") return (f.dias || []).map(function (d) { return DIAS[d - 1].slice(0, 3); }).join(" · "); if (f.t === "sem") return f.n + " veces por semana"; return "Cada día"; }
 
   /* ---------- «añadir escribiendo»: «llamar al dentista mañana 10am #salud !» ---------- */
@@ -125,7 +131,7 @@
     return null;
   }
   function parsear(entrada, hoyS) {
-    var t = " " + String(entrada || "").trim() + " ", r = { titulo: "", fecha: "", hora: "", lista: "", prioridad: 0, partes: [] }, x;
+    var t = " " + String(entrada || "").trim() + " ", r = { titulo: "", fecha: "", hora: "", lista: "", prioridad: 0, rep: "", partes: [] }, x;
     hoyS = hoyS || hoy();
     // lista: #casa  o  «lista: casa»
     x = sacar(t, /\s#([\wáéíóúñÁÉÍÓÚÑ-]+)/); if (x.m) { r.lista = x.m[1]; t = x.txt; r.partes.push("Lista: " + x.m[1]); }
@@ -133,6 +139,12 @@
     // prioridad
     x = sacar(t, /\s(!{1,3})(?=\s)/); if (x.m) { r.prioridad = Math.min(2, x.m[1].length); t = x.txt; r.partes.push("Prioridad"); }
     else { x = sacar(t, /\s(urgente|importante)(?=\s)/i); if (x.m) { r.prioridad = /urgente/i.test(x.m[1]) ? 2 : 1; t = x.txt; r.partes.push("Prioridad"); } }
+    // repetición: «cada día», «lunes a viernes», «cada semana», «cada mes», «cada lunes»
+    x = sacar(t, /\s(?:cada\s+d[ií]a|todos\s+los\s+d[ií]as|diario)(?=\s|$|[.,])/i); if (x.m) { r.rep = "dia"; t = x.txt; r.partes.push("Cada día"); }
+    if (!r.rep) { x = sacar(t, /\s(?:de\s+)?lunes\s+a\s+viernes(?=\s|$|[.,])/i); if (x.m) { r.rep = "lab"; t = x.txt; r.partes.push("Lun–vie"); } }
+    if (!r.rep) { x = sacar(t, /\s(?:cada\s+semana|todas\s+las\s+semanas|semanal)(?=\s|$|[.,])/i); if (x.m) { r.rep = "sem"; t = x.txt; r.partes.push("Cada semana"); } }
+    if (!r.rep) { x = sacar(t, /\s(?:cada\s+mes|todos\s+los\s+meses|mensual)(?=\s|$|[.,])/i); if (x.m) { r.rep = "mes"; t = x.txt; r.partes.push("Cada mes"); } }
+    if (!r.rep) { x = sacar(t, /\scada\s+(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)(?=\s|$|[.,])/i); if (x.m) { r.rep = "sem"; t = x.txt + x.m[1] + " "; r.partes.push("Cada " + x.m[1].toLowerCase()); } }
     // hora
     var h = null;
     x = sacar(t, /\s(?:a\s+las?\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)(?=\s|$|[.,])/i);
@@ -145,13 +157,13 @@
     // fecha: se prueba cada forma en orden y se queda con la primera que aparezca
     var f = "", fd = fechaDe(t, hoyS); if (fd) { f = fd.f; t = fd.txt; }
     if (f) { r.fecha = f; r.partes.unshift(f === hoyS ? "Hoy" : f === addD(hoyS, 1) ? "Mañana" : DIAS[dow(f) - 1].slice(0, 3) + " " + pf(f).getDate() + " " + MESES[pf(f).getMonth()].slice(0, 3)); }
-    else if (r.hora) { r.fecha = hoyS; r.partes.unshift("Hoy"); }
+    else if (r.hora || r.rep) { r.fecha = hoyS; r.partes.unshift("Hoy"); }
     t = t.replace(/\s+(el|para|a|de|en|a las?)\s*$/i, " ").replace(/^\s*(recuérdame|recordarme|recordar)\s+/i, "").replace(/\s+/g, " ").trim();
     r.titulo = t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
     return r;
   }
 
   var api = { DIAS: DIAS, MESES: MESES, fstr: fstr, pf: pf, hoy: hoy, addD: addD, dow: dow, lunes: lunes, norm: norm, uid: uid, valor: valor, cumplido: cumplido, programado: programado, hechosSemana: hechosSemana,
-    racha: racha, tasa: tasa, ultimos: ultimos, resumenDia: resumenDia, PLANTILLAS: PLANTILLAS, IDEAS: IDEAS, mejorRacha: mejorRacha, mejorDia: mejorDia, textoFrec: textoFrec, parsear: parsear };
+    racha: racha, tasa: tasa, ultimos: ultimos, resumenDia: resumenDia, PLANTILLAS: PLANTILLAS, IDEAS: IDEAS, mejorRacha: mejorRacha, mejorDia: mejorDia, textoFrec: textoFrec, parsear: parsear, siguiente: siguiente };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.HCore = api;
 })(typeof window !== "undefined" ? window : this);

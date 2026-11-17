@@ -53,8 +53,46 @@
     { n: "Meditar", e: "🧘", tipo: "cant", meta: 10, un: "min", frec: { t: "dia" } }, { n: "Escuchar música", e: "🎧", tipo: "cant", meta: 30, un: "min", frec: { t: "dia" } },
     { n: "Estudiar", e: "🎓", tipo: "cant", meta: 30, un: "min", frec: { t: "dias", dias: [1, 2, 3, 4, 5] } }, { n: "Caminar", e: "🚶", tipo: "cant", meta: 6000, un: "pasos", frec: { t: "dia" } },
     { n: "Entrenar", e: "🏋️", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 4 } }, { n: "Dormir temprano", e: "😴", tipo: "check", meta: 1, un: "", frec: { t: "dia" } },
-    { n: "Escribir en el diario", e: "✍️", tipo: "check", meta: 1, un: "", frec: { t: "dia" } }, { n: "Sin redes sociales", e: "📵", tipo: "check", meta: 1, un: "", frec: { t: "dia" } }
+    { n: "Escribir en el diario", e: "✍️", tipo: "check", meta: 1, un: "", frec: { t: "dia" } }, { n: "Sin redes sociales", e: "📵", tipo: "check", meta: 1, un: "", frec: { t: "dia" } },
+    { n: "Ir al gym", e: "💪", tipo: "gym", meta: 1, un: "", frec: { t: "sem", n: 4 } }
   ];
+  /* Ideas de hábitos que practican muchos emprendedores, deportistas y líderes (c = categoría, d = para qué sirve) */
+  var IDEAS = [
+    { c: "Mañana", n: "Levantarme temprano", e: "🌅", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Ganar horas tranquilas antes de que empiece el ruido del día" },
+    { c: "Mañana", n: "Beber agua al despertar", e: "🥛", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Hidratarte antes del café" },
+    { c: "Mañana", n: "Sin celular la primera hora", e: "📵", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Empezar con tu agenda, no con la de otros" },
+    { c: "Mañana", n: "Ejercicio de mañana", e: "🏃", tipo: "cant", meta: 20, un: "min", frec: { t: "dia" }, d: "Energía y ánimo para todo el día" },
+    { c: "Mañana", n: "Ducha fría", e: "🚿", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Disciplina y activación" },
+    { c: "Mañana", n: "Tender la cama", e: "🛏️", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Primera victoria del día" },
+    { c: "Mente", n: "Leer 30 minutos", e: "📚", tipo: "cant", meta: 30, un: "min", frec: { t: "dia" }, d: "Aprender un poco cada día" },
+    { c: "Mente", n: "Escribir 3 gratitudes", e: "🙏", tipo: "cant", meta: 3, un: "cosas", frec: { t: "dia" }, d: "Entrena la atención en lo bueno" },
+    { c: "Mente", n: "Aprender algo nuevo", e: "🧠", tipo: "cant", meta: 20, un: "min", frec: { t: "dia" }, d: "Un idioma, un curso, una habilidad" },
+    { c: "Mente", n: "Visualizar mis metas", e: "🎯", tipo: "cant", meta: 5, un: "min", frec: { t: "dia" }, d: "Tener claro hacia dónde vas" },
+    { c: "Trabajo", n: "Elegir mis 3 prioridades del día", e: "✅", tipo: "check", meta: 1, un: "", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Lo importante antes que lo urgente" },
+    { c: "Trabajo", n: "Trabajo profundo", e: "🧑‍💻", tipo: "cant", meta: 90, un: "min", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Un bloque sin interrupciones en lo más importante" },
+    { c: "Trabajo", n: "Revisar mis finanzas", e: "💰", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 3 }, d: "5 minutos para saber en qué estás" },
+    { c: "Trabajo", n: "Escribir a alguien de mi red", e: "🤝", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 3 }, d: "Cuidar relaciones y oportunidades" },
+    { c: "Trabajo", n: "Revisión semanal", e: "🗓️", tipo: "check", meta: 1, un: "", frec: { t: "dias", dias: [7] }, d: "Cerrar la semana y planear la siguiente" },
+    { c: "Cuerpo", n: "Caminar 10 000 pasos", e: "🚶", tipo: "cant", meta: 10000, un: "pasos", frec: { t: "dia" }, d: "Movimiento diario sin gimnasio" },
+    { c: "Cuerpo", n: "Estirar", e: "🤸", tipo: "cant", meta: 10, un: "min", frec: { t: "dia" }, d: "Menos tensión y más movilidad" },
+    { c: "Cuerpo", n: "Frutas y verduras", e: "🥗", tipo: "cant", meta: 5, un: "porciones", frec: { t: "dia" }, d: "Comer mejor sin dietas" },
+    { c: "Cuerpo", n: "Sin azúcar ni alcohol", e: "🚫", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Menos antojos, mejor sueño" },
+    { c: "Noche", n: "Preparar el día de mañana", e: "📝", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Dormir tranquilo y arrancar sin dudas" },
+    { c: "Noche", n: "Apagar pantallas antes de dormir", e: "🌙", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Una hora sin pantallas para dormir mejor" },
+    { c: "Noche", n: "Dormir 7 a 8 horas", e: "😴", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "La base de todo lo demás" }
+  ];
+  function mejorRacha(h, db, hasta) {   // la racha más larga de toda la historia del hábito
+    var ini = h.ini || hasta, best = 0, cur = 0, t = h.frec && h.frec.t || "dia", d, g = 0;
+    if (t === "sem") { var n = h.frec.n || 3, lh = lunes(hasta); for (d = lunes(ini); d <= lh && g < 400; d = addD(d, 7), g++) { if (hechosSemana(h, db, d) >= n) { cur++; if (cur > best) best = cur; } else if (d !== lh) cur = 0; } return best; }
+    for (d = ini; d <= hasta && g < 1500; d = addD(d, 1), g++) { if (!programado(h, d)) continue; if (cumplido(h, valor(db, h.id, d))) { cur++; if (cur > best) best = cur; } else if (d !== hasta) cur = 0; }
+    return best;
+  }
+  function mejorDia(h, db, hasta) {   // día de la semana (1 lunes … 7 domingo) en el que más lo cumples; 0 si aún no hay datos
+    var c = [0, 0, 0, 0, 0, 0, 0, 0], d, g = 0, ini = h.ini || hasta, best = 0, bd = 0;
+    for (d = ini; d <= hasta && g < 1500; d = addD(d, 1), g++) if (cumplido(h, valor(db, h.id, d))) c[dow(d)]++;
+    for (var i = 1; i <= 7; i++) if (c[i] > best) { best = c[i]; bd = i; }
+    return bd;
+  }
   function textoFrec(h) { var f = h.frec || { t: "dia" }; if (f.t === "dias") return (f.dias || []).map(function (d) { return DIAS[d - 1].slice(0, 3); }).join(" · "); if (f.t === "sem") return f.n + " veces por semana"; return "Cada día"; }
 
   /* ---------- «añadir escribiendo»: «llamar al dentista mañana 10am #salud !» ---------- */
@@ -114,6 +152,6 @@
   }
 
   var api = { DIAS: DIAS, MESES: MESES, fstr: fstr, pf: pf, hoy: hoy, addD: addD, dow: dow, lunes: lunes, norm: norm, uid: uid, valor: valor, cumplido: cumplido, programado: programado, hechosSemana: hechosSemana,
-    racha: racha, tasa: tasa, ultimos: ultimos, resumenDia: resumenDia, PLANTILLAS: PLANTILLAS, textoFrec: textoFrec, parsear: parsear };
+    racha: racha, tasa: tasa, ultimos: ultimos, resumenDia: resumenDia, PLANTILLAS: PLANTILLAS, IDEAS: IDEAS, mejorRacha: mejorRacha, mejorDia: mejorDia, textoFrec: textoFrec, parsear: parsear };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.HCore = api;
 })(typeof window !== "undefined" ? window : this);

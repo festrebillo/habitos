@@ -1,7 +1,7 @@
 /* Hábitos · hábitos con meta, pendientes, calendario (Google Calendar) y avisos dentro de la app. Los datos van a tu hoja «Fergard · Hábitos». */
 (function () {
   "use strict";
-  var CFG = window.FG_CFG || {}, VERSION = "0.1.0", DB_KEY = "habitos_db", H = window.HCore;
+  var CFG = window.FG_CFG || {}, VERSION = "0.1.1", DB_KEY = "habitos_db", H = window.HCore;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var LS = (function () { try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); return localStorage; } catch (e) { var m = {}; return { getItem: function (k) { return m[k] || null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } }; } })();
@@ -96,10 +96,10 @@
     var id = esc(t.id), subs = t.sub && t.sub.length ? '<span class="pill">' + t.sub.filter(function (s) { return s.ok; }).length + "/" + t.sub.length + " pasos</span>" : "";
     var atras = !t.ok && t.f && t.f < H.hoy() ? '<span class="pill alta">Atrasada</span>' : "";
     var st = atras + pri(t) + (t.l ? '<span class="pill">#' + esc(t.l) + "</span>" : "") + subs + (conFecha && t.f ? '<span class="pill">' + esc(fRel(t.f)) + "</span>" : "") + (t.nota ? esc(t.nota.slice(0, 40)) : "");
-    return '<div class="fila' + (t.ok ? " ok" : "") + '" role="button" tabindex="0" data-a="tedit" data-id="' + id + '"><div class="hora">' + esc(t.h || "") + '</div><div class="tx"><div class="tt">' + esc(t.t) + "</div>" + (st ? '<div class="st">' + st + "</div>" : "") + '</div><div class="cbw"><button class="cb' + (t.ok ? " on" : "") + '" data-a="tchk" data-id="' + id + '" aria-label="' + (t.ok ? "Desmarcar " : "Completar ") + esc(t.t) + '" aria-pressed="' + !!t.ok + '">' + ico("chk") + "</button></div></div>";
+    return '<div class="fila t' + (t.ok ? " ok" : "") + '" role="button" tabindex="0" data-a="tedit" data-id="' + id + '"><div class="hora">' + esc(t.h || "") + '</div><div class="tx"><div class="tt">' + esc(t.t) + "</div>" + (st ? '<div class="st">' + st + "</div>" : "") + '</div><div class="cbw"><button class="cb' + (t.ok ? " on" : "") + '" data-a="tchk" data-id="' + id + '" aria-label="' + (t.ok ? "Desmarcar " : "Completar ") + esc(t.t) + '" aria-pressed="' + !!t.ok + '">' + ico("chk") + "</button></div></div>";
   }
   function filaEv(e) {
-    return '<div class="fila"><div class="hora">' + (e.td ? "Todo<br>el día" : esc(e.i.slice(11))) + '</div><div class="tx"><div class="tt">' + esc(e.t) + '</div><div class="st"><span class="pill cal">Google Calendar</span>' + (e.l ? esc(e.l) : "") + "</div></div></div>";
+    return '<div class="fila t"><div class="hora">' + (e.td ? "Todo<br>el día" : esc(e.i.slice(11))) + '</div><div class="tx"><div class="tt">' + esc(e.t) + '</div><div class="st"><span class="pill cal">Google Calendar</span>' + (e.l ? esc(e.l) : "") + "</div></div></div>";
   }
   function agenda(f) {   // eventos + pendientes de un día, por hora
     var it = [];
@@ -205,14 +205,16 @@
     var t = { id: H.uid(), t: o.titulo, f: o.fecha || "", h: o.hora || "", l: o.lista || "", p: o.prioridad || 0, ok: false, nota: "", sub: [] };
     db.tareas[t.id] = t; touch("tarea", t.id, t); return t;
   }
-  function parseQA() {
-    var v = ($("#qa-t").value || ""), r = H.parsear(v, H.hoy()); if (!r.fecha && S.qa && S.qa.f) r.fecha = S.qa.f; S.qa.r = r;
-    var c = []; if (r.fecha) c.push("📅 " + fRel(r.fecha)); if (r.hora) c.push("🕒 " + r.hora); if (r.lista) c.push("#" + r.lista); if (r.prioridad) c.push(r.prioridad === 2 ? "Prioridad alta" : "Prioridad media");
-    $("#qa-p").innerHTML = c.map(function (x) { return '<span class="pill cal">' + esc(x) + "</span>"; }).join("") || '<span class="pill">Escribe y detecto fecha, hora y lista</span>';
+  function parseQA(deTexto) {
+    var v = ($("#qa-t").value || ""), r = H.parsear(v, H.hoy()), fi = $("#qa-f"), hi = $("#qa-h");
+    if (deTexto !== false) { if (r.fecha) fi.value = r.fecha; if (r.hora) hi.value = r.hora; }
+    r.fecha = fi.value || ""; r.hora = r.fecha ? (hi.value || "") : ""; S.qa.r = r;
+    var c = []; c.push(r.fecha ? "📅 " + fRel(r.fecha) : "Sin fecha (algún día)"); if (r.hora) c.push("🕒 " + r.hora); if (r.lista) c.push("#" + r.lista); if (r.prioridad) c.push(r.prioridad === 2 ? "Prioridad alta" : "Prioridad media");
+    $("#qa-p").innerHTML = c.map(function (x) { return '<span class="pill cal">' + esc(x) + "</span>"; }).join("");
   }
   function abrirAdd(f) {
     S.qa = { f: f || "", r: null };
-    abrir('<h3>Añadir</h3><input id="qa-t" placeholder="Llamar al dentista mañana 10am #salud !" autocomplete="off" autocapitalize="sentences" enterkeyhint="done"><div class="parte" id="qa-p"></div><button class="btn" data-a="qa-tarea">Añadir pendiente</button><button class="btn sec" data-a="qa-evento">Crear evento en Google Calendar</button><button class="btn sec" data-a="hnew">Nuevo hábito</button><div class="vacio" style="padding:14px 4px 0;font-size:13px">Ejemplos: «pagar la luz hoy», «reunión con Laura el viernes 15:30», «comprar regalo en 3 días #casa». Con <b style="display:inline">!</b> o «urgente» sube la prioridad.</div>');
+    abrir('<h3>Añadir</h3><input id="qa-t" placeholder="Llamar al dentista mañana 10am #salud !" autocomplete="off" autocapitalize="sentences" enterkeyhint="done"><div class="dup"><div><label class="lbl" for="qa-f">Fecha (puedes dejarla en blanco)</label><input id="qa-f" type="date" value="' + esc(S.qa.f || H.hoy()) + '"></div><div><label class="lbl" for="qa-h">Hora</label><input id="qa-h" type="time"></div></div><div class="chips" style="margin-top:8px"><button data-a="qa-fh" data-v="hoy">Hoy</button><button data-a="qa-fh" data-v="man">Mañana</button><button data-a="qa-fh" data-v="no">Sin fecha</button></div><div class="parte" id="qa-p"></div><button class="btn" data-a="qa-tarea">Añadir pendiente</button><button class="btn sec" data-a="qa-evento">Crear evento en Google Calendar</button><button class="btn sec" data-a="hnew">Nuevo hábito</button><div class="vacio" style="padding:14px 4px 0;font-size:13px">Ejemplos: «pagar la luz hoy», «reunión con Laura el viernes 15:30», «comprar regalo en 3 días #casa». Con ! o «urgente» sube la prioridad. Si no pones fecha queda como «algún día» (por ejemplo una compra futura).</div>');
     parseQA(); setTimeout(function () { var i = $("#qa-t"); if (i) i.focus(); }, 60);
   }
   function crearEvento(t, f, h) {
@@ -341,8 +343,9 @@
     calprev: function () { mover(-1); }, calnext: function () { mover(1); },
     calhoy: function () { S.dia = H.hoy(); var r = rangoVista(); cargarEv(r[0], r[1]); pintar(); },
     dia: function (el) { S.dia = el.dataset.f; pintar(); },
-    "qa-tarea": function () { parseQA(); var r = S.qa.r; if (!r.titulo) { toast("Escribe qué hay que hacer"); return; } addTarea(r); cerrar(); pintar(); toast("Pendiente añadido" + (r.fecha ? " · " + fRel(r.fecha).toLowerCase() : "")); },
-    "qa-evento": function () { parseQA(); var r = S.qa.r; if (!r.titulo) { toast("Escribe el título del evento"); return; } if (!r.fecha) r.fecha = H.hoy(); crearEvento(r.titulo, r.fecha, r.hora).then(function (ok) { if (ok) { cerrar(); } }); },
+    "qa-fh": function (el) { $("#qa-f").value = el.dataset.v === "hoy" ? H.hoy() : el.dataset.v === "man" ? H.addD(H.hoy(), 1) : ""; if (el.dataset.v === "no") $("#qa-h").value = ""; parseQA(false); },
+    "qa-tarea": function () { parseQA(false); var r = S.qa.r; if (!r.titulo) { toast("Escribe qué hay que hacer"); return; } addTarea(r); cerrar(); pintar(); toast("Pendiente añadido" + (r.fecha ? " · " + fRel(r.fecha).toLowerCase() : "")); },
+    "qa-evento": function () { parseQA(false); var r = S.qa.r; if (!r.titulo) { toast("Escribe el título del evento"); return; } if (!r.fecha) r.fecha = H.hoy(); crearEvento(r.titulo, r.fecha, r.hora).then(function (ok) { if (ok) { cerrar(); } }); },
     sync: function () { sync(true).then(ajustes); },
     rec: function (el) { db.ajustes.rec = el.checked; touch("ajustes", "a", db.ajustes); },
     evrec: function () { S.evR = {}; S.evErr = ""; var r = rangoVista(); Promise.all([cargarEv(r[0], r[1], true), cargarEv(H.hoy(), H.addD(H.hoy(), 1), true)]).then(function () { toast(S.evErr ? "Problema: " + S.evErr : "Calendario actualizado"); ajustes(); }); },
@@ -365,7 +368,8 @@
     if (e.key === "Enter" && e.target.id === "qa-t") { e.preventDefault(); A["qa-tarea"](); }
     if (e.key === "Escape" && !$("#modal").hidden) cerrar();
   });
-  document.addEventListener("input", function (e) { if (e.target.id === "qa-t") parseQA(); });
+  document.addEventListener("input", function (e) { if (e.target.id === "qa-t") parseQA(true); });
+  document.addEventListener("change", function (e) { if (e.target.id === "qa-f" || e.target.id === "qa-h") parseQA(false); });
   $("#fab").addEventListener("click", function () { A.fab(); });
 
   /* ---------- arranque ---------- */

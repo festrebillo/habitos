@@ -1,7 +1,7 @@
 /* Hábitos · hábitos con meta, pendientes, calendario (Google Calendar) y avisos dentro de la app. Los datos van a tu hoja «Fergard · Hábitos». */
 (function () {
   "use strict";
-  var CFG = window.FG_CFG || {}, VERSION = "0.7.0", DB_KEY = "habitos_db", H = window.HCore;
+  var CFG = window.FG_CFG || {}, VERSION = "0.8.0", DB_KEY = "habitos_db", H = window.HCore;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var LS = (function () { try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); return localStorage; } catch (e) { var m = {}; return { getItem: function (k) { return m[k] || null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } }; } })();
@@ -15,9 +15,9 @@
   var db = cargar();
   var S = { tab: "hoy", pv: "fecha", pf: "todas", hv: "hab", cal: "sem", dia: H.hoy(), lista: "", ev: [], evR: {}, evErr: "", cargando: false, sync: "", hd: null, qa: null, snooze: {}, hord: false, enf: null };
   function save() { try { LS.setItem(DB_KEY, JSON.stringify(db)); } catch (e) {} }
-  function touch(t, id, o) { if (o) o.upd = Date.now(); db.pend[t + ":" + id] = Date.now(); save(); schedSync(); }
+  function touch(t, id, o) { if (o) o.upd = Date.now(); db.pend[t + ":" + id] = Date.now(); save(); schedSync(); if (t === "tarea") setTimeout(function () { calAuto(id); }, 500); }
   function mapa(t) { return t === "habito" ? db.habitos : t === "registro" ? db.registros : t === "tarea" ? db.tareas : t === "meta" ? db.metas : t === "diario" ? db.diario : null; }
-  function quitar(t, id) { var m = mapa(t); delete m[id]; db.pend[t + ":" + id] = Date.now(); save(); schedSync(); }
+  function quitar(t, id) { var m = mapa(t); if (t === "tarea" && m[id] && m[id].cid) calBorrar(m[id].cid); delete m[id]; db.pend[t + ":" + id] = Date.now(); save(); schedSync(); }
   function cfg() { return window.FergardAcceso ? FergardAcceso.config() : { token: null, url: null }; }
   function post(url, body) { return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function (r) { return r.json(); }); }
   function docsPend() {
@@ -51,7 +51,7 @@
     }).catch(function () { S.sync = "Sin conexión · se subirá después"; if (manual) toast("Sin conexión"); }).then(function () { syncing = false; pintarNube(); });
   }
   window.addEventListener("online", function () { sync(false); });
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) { sync(false); S.dia = S.dia || H.hoy(); syncGym(); syncIdiomas(); tickEnf(); revisar(); buscarActualizacion(); } });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { sync(false); S.dia = S.dia || H.hoy(); syncGym(); syncIdiomas(); syncGastos(); tickEnf(); revisar(); buscarActualizacion(); } });
 
   function toast(t) { var e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(function () { e.classList.remove("on"); }, 2600); }
   function ico(n) {
@@ -74,7 +74,7 @@
   function subHab(h, sinRacha) {
     var f = H.hoy(), partes = [];
     if (sinRacha && H.cumplido(h, H.valor(db, h.id, f))) partes.push("Hecho");
-    if (h.tipo === "gym") partes.push("💪 Se marca solo con tu app Gym"); if (h.tipo === "idioma") partes.push("🗣️ Se marca solo con tu app Idiomas");
+    if (h.tipo === "gym") partes.push("💪 Se marca solo con tu app Gym"); if (h.tipo === "idioma") partes.push("🗣️ Se marca solo con tu app Idiomas"); if (h.tipo === "gastos") partes.push("💳 Se marca solo al registrar un gasto");
     if (h.tipo === "cant") partes.push("Meta " + h.meta + " " + esc(h.un || ""));
     if (h.frec && h.frec.t === "sem") partes.push(H.hechosSemana(h, db, f) + "/" + h.frec.n + " esta semana"); else if (h.frec && h.frec.t === "dias") partes.push(esc(H.textoFrec(h)));
     var r = sinRacha ? "" : textoRacha(h); if (r) partes.push(r); if (h.hora) partes.push("Recordatorio a las " + esc(h.hora));
@@ -462,6 +462,46 @@
       if (n) { pintar(); toast("Gym: " + n + (n === 1 ? " día marcado" : " días marcados")); }
     }).catch(function () {});
   }
+
+  /* ---- aviso en Google Calendar: cada pendiente con fecha y hora crea su evento con alarma ---- */
+  var calBusy = {};
+  function calKey(t) { return t.f && t.h && !t.ok ? t.f + "|" + t.h + "|" + t.t + "|" + (t.av || 0) : ""; }
+  function calBorrar(id) { var c = cfg(); if (!c.token || !c.url || !id) return; post(c.url, { op: "evento_borrar", app: "habitos", token: c.token, id: id }).catch(function () {}); }
+  function calAuto(id) {
+    var t = db.tareas[id], c = cfg(); if (!t || db.ajustes.cal === false || !c.token || !c.url) return;
+    var k = calKey(t); if ((t.cidk || "") === k) return;
+    if (calBusy[id]) { calBusy[id] = 2; return; } calBusy[id] = 1;
+    var p = t.cid ? post(c.url, { op: "evento_borrar", app: "habitos", token: c.token, id: t.cid }).catch(function () {}) : Promise.resolve(), cambio = false;
+    p.then(function () {
+      if (!k) { t.cid = ""; t.cidk = ""; cambio = true; return; }
+      if (new Date(t.f + "T" + t.h + ":00").getTime() < Date.now()) { t.cid = ""; t.cidk = k; cambio = true; return; }   // ya pasó: no se crea
+      return post(c.url, { op: "evento_crear", app: "habitos", token: c.token, t: t.t, f: t.f, h: t.h, mins: 30, alarma: t.av || 10, nota: t.nota || "" }).then(function (r) {
+        if (r && r.ok) { t.cid = r.id; t.cidk = k; S.calErr = ""; } else { S.calErr = (r && r.error) || "error"; t.cid = ""; t.cidk = k; } cambio = true;
+      });
+    }).catch(function () {}).then(function () {
+      var otra = calBusy[id] === 2; delete calBusy[id];
+      if (cambio && db.tareas[id]) { touch("tarea", id, db.tareas[id]); }
+      if (otra) calAuto(id);
+    });
+  }
+
+  /* ---- resumen por correo (lo envía tu script de Fergard con un activador diario) ---- */
+  function resPintar() {
+    var b = $("#resbox"); if (!b) return; var c = cfg(); if (!c.token || !c.url) { b.textContent = "Vincula la app para usarlo."; return; }
+    post(c.url, { op: "resumen_estado", app: "habitos", token: c.token }).then(function (r) {
+      b = $("#resbox"); if (!b) return;
+      if (!r || !r.ok) { b.innerHTML = r && r.error === "operacion_desconocida" ? "Actualiza el script de Fergard (v0.12.0) para activarlo." : "No se pudo consultar (" + esc((r && r.error) || "error") + ")."; return; }
+      var op = ""; for (var h = 5; h <= 23; h++) op += '<option value="' + h + '"' + (r.hora === h ? " selected" : "") + ">" + (h % 12 || 12) + ":00 " + (h < 12 ? "am" : "pm") + "</option>";
+      b.innerHTML = '<label class="sw"><input type="checkbox" id="res-on"' + (r.activo ? " checked" : "") + ' data-a="reson"> Enviarme cada noche mi resumen del día (y los domingos, el de la semana)</label><label class="lbl" for="res-h">Hora de envío</label><select id="res-h" data-a="reshora">' + op + '</select><button class="btn sec" style="margin-top:10px" data-a="resprueba">Enviarme uno de prueba ahora</button><div style="font-size:12.5px;margin-top:6px;line-height:1.45">Llega al correo de tu cuenta de Google. Zona horaria del script: ' + esc(r.zona || "") + ".</div>";
+    }).catch(function () { b = $("#resbox"); if (b) b.textContent = "Sin conexión."; });
+  }
+  function resConfig() {
+    var c = cfg(), on = $("#res-on"), h = $("#res-h"); if (!on || !h) return;
+    post(c.url, { op: "resumen_config", app: "habitos", token: c.token, activo: on.checked, hora: +h.value, semanal: true }).then(function (r) {
+      if (r && r.ok) toast(r.activo ? "Resumen activado · " + r.hora + ":00" : "Resumen desactivado");
+      else { toast(r && r.error === "operacion_desconocida" ? "Actualiza el script (v0.12.0)" : "No se pudo guardar. Ejecuta «preparar» en el script y publica una versión nueva"); on.checked = false; }
+    }).catch(function () { toast("Sin conexión"); });
+  }
 /* ---- modo enfoque (pomodoro) ---- */
   function enfLeer() { try { var o = JSON.parse(LS.getItem("hb_enf") || "null"); return o && o.fin ? o : null; } catch (e) { return null; } }
   function enfGuardar(o) { S.enf = o; try { if (o) LS.setItem("hb_enf", JSON.stringify(o)); else LS.removeItem("hb_enf"); } catch (e) {} tickEnf(); }
@@ -512,6 +552,17 @@
     var p = v.charAt(0) === "p" ? H.PLANTILLAS[+v.slice(2)] : H.IDEAS[+v.slice(2)]; if (!p) return; leerHE();
     S.hd.n = p.n; S.hd.e = p.e; S.hd.tipo = p.tipo; S.hd.meta = p.meta; S.hd.un = p.un; S.hd.frec = JSON.parse(JSON.stringify(p.frec)); S.hd.frec.dias = S.hd.frec.dias || []; S.hd.frec.n = S.hd.frec.n || 3; pintarHE();
   }
+  function syncGastos(fuerza) {
+    var c = cfg(); if (!c.token || !c.url) return Promise.resolve();
+    var hs = listaHab().filter(function (h) { return h.tipo === "gastos" && !h.arch; }); if (!hs.length) return Promise.resolve();
+    if (!fuerza && S.gasT && Date.now() - S.gasT < 120000) return Promise.resolve(); S.gasT = Date.now();
+    var f = H.hoy();
+    return post(c.url, { op: "gastos_dias", app: "habitos", token: c.token, desde: H.addD(f, -60), hasta: f }).then(function (r) {
+      if (!r || !r.ok) { S.gasErr = (r && r.error) || "error"; return; } S.gasErr = ""; var n = 0;
+      (r.dias || []).forEach(function (d) { hs.forEach(function (h) { if (H.valor(db, h.id, d.f) === 0) { setValor(h, d.f, 1); n++; } }); });
+      pintar(); if (n) toast("Gastos: " + n + (n === 1 ? " día marcado" : " días marcados"));
+    }).catch(function () {});
+  }
   function syncIdiomas(fuerza) {
     var c = cfg(); if (!c.token || !c.url) return Promise.resolve();
     var hs = listaHab().filter(function (h) { return h.tipo === "idioma" && !h.arch; }), hayMeta = Object.keys(db.metas).some(function (k) { return db.metas[k].idi; });
@@ -536,12 +587,13 @@
   function crearDe(tipo) {
     var p = H.PLANTILLAS.filter(function (x) { return x.tipo === tipo; })[0]; if (!p) return;
     var h = { id: H.uid(), n: p.n, e: p.e, tipo: p.tipo, meta: p.meta, un: p.un, frec: JSON.parse(JSON.stringify(p.frec)), hora: "", ini: H.hoy(), orden: Object.keys(db.habitos).length };
-    db.habitos[h.id] = h; touch("habito", h.id, h); toast("Hábito creado: " + p.n); if (tipo === "gym") { S.gymT = 0; syncGym(); } else { S.idiT = 0; syncIdiomas(true); } ajustes();
+    db.habitos[h.id] = h; touch("habito", h.id, h); toast("Hábito creado: " + p.n); if (tipo === "gym") { S.gymT = 0; syncGym(); } else if (tipo === "gastos") syncGastos(true); else { S.idiT = 0; syncIdiomas(true); } ajustes();
   }
 function conexionFila(tipo, em, app, plantilla) {
-    var hay = listaHab().some(function (h) { return h.tipo === tipo && !h.arch; }), err = tipo === "gym" ? S.gymErr : S.idiErr, ver = tipo === "gym" ? "v0.8.0" : "v0.11.0", est, btn = "";
-    if (!hay) { est = "Aún no tienes el hábito. Se marca solo con tu app " + app + "."; btn = '<button class="btn sec" style="margin:8px 0 0;height:44px" data-a="crear' + (tipo === "gym" ? "Gym" : "Idi") + '">Crear hábito «' + plantilla + '»</button>'; }
-    else if (err === "operacion_desconocida") est = "Actualiza el script de Fergard (" + ver + " o más nueva)"; else if (err) est = "Problema: " + esc(err); else est = "Conectado ✓ · se marca solo con tus sesiones de " + app;
+    var hay = listaHab().some(function (h) { return h.tipo === tipo && !h.arch; }), err = tipo === "gym" ? S.gymErr : tipo === "gastos" ? S.gasErr : S.idiErr, ver = tipo === "gym" ? "v0.8.0" : tipo === "gastos" ? "v0.12.0" : "v0.11.0", est, btn = "";
+    var acc = tipo === "gym" ? "Gym" : tipo === "gastos" ? "Gas" : "Idi", verbo = tipo === "gastos" ? "registres un gasto" : "uses " + app;
+    if (!hay) { est = "Aún no tienes el hábito. Se marca solo cuando " + verbo + "."; btn = '<button class="btn sec" style="margin:8px 0 0;height:44px" data-a="crear' + acc + '">Crear hábito «' + plantilla + '»</button>'; }
+    else if (err === "operacion_desconocida") est = "Actualiza el script de Fergard (" + ver + " o más nueva)"; else if (err === "gastos_no_encontrado") est = "No encuentro tu hoja «Seguimiento de Gastos» en Drive"; else if (err) est = "Problema: " + esc(err); else est = "Conectado ✓ · se marca solo cuando " + verbo;
     return '<div class="fila" style="display:block"><div style="display:flex;gap:10px;align-items:center"><div class="em">' + em + '</div><div class="tx"><div class="tt">' + app + '</div><div class="st" style="white-space:normal">' + est + "</div></div></div>" + btn + "</div>";
   }
   var TABS = [["hoy", "Hoy"], ["pend", "Pendientes"], ["cal", "Calendario"], ["hab", "Hábitos"], ["prog", "Progreso"]];
@@ -614,7 +666,7 @@ function conexionFila(tipo, em, app, plantilla) {
     var d = S.hd, f = d.frec, dn = ["L", "M", "M", "J", "V", "S", "D"];
     abrir('<h3>' + (d.id ? "Editar hábito" : "Nuevo hábito") + "</h3>" + (d.id ? "" : plantillaSelect()) +
       '<div class="dup" style="grid-template-columns:70px 1fr"><div style="flex:0 0 76px"><label class="lbl" for="he-e">Icono</label><input id="he-e" value="' + esc(d.e) + '" maxlength="4" style="text-align:center;font-size:22px"></div><div><label class="lbl" for="he-n">Nombre</label><input id="he-n" value="' + esc(d.n) + '" placeholder="Leer, caminar, meditar…"></div></div>' +
-      '<label class="lbl">¿Cómo se mide?</label><div class="seg"><button class="' + (d.tipo === "check" ? "on" : "") + '" data-a="htipo" data-v="check">Casilla</button><button class="' + (d.tipo === "cant" ? "on" : "") + '" data-a="htipo" data-v="cant">Cantidad</button><button class="' + (d.tipo === "gym" ? "on" : "") + '" data-a="htipo" data-v="gym">Gym</button><button class="' + (d.tipo === "idioma" ? "on" : "") + '" data-a="htipo" data-v="idioma">Idiomas</button></div>' + (d.tipo === "gym" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Se marca solo cuando terminas un entrenamiento en tu app Gym.</div>' : d.tipo === "idioma" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Se marca solo cuando completas una lección en tu app Idiomas.</div>' : d.tipo === "check" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Lo marcas tú con un toque: hecho o no hecho.</div>' : '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Con meta numérica: por ejemplo 10 páginas o 8 vasos.</div>') +
+      '<label class="lbl">¿Cómo se mide?</label><div class="seg"><button class="' + (d.tipo === "check" ? "on" : "") + '" data-a="htipo" data-v="check">Casilla</button><button class="' + (d.tipo === "cant" ? "on" : "") + '" data-a="htipo" data-v="cant">Cantidad</button><button class="' + (d.tipo === "gym" ? "on" : "") + '" data-a="htipo" data-v="gym">Gym</button><button class="' + (d.tipo === "idioma" ? "on" : "") + '" data-a="htipo" data-v="idioma">Idiomas</button><button class="' + (d.tipo === "gastos" ? "on" : "") + '" data-a="htipo" data-v="gastos">Gastos</button></div>' + (d.tipo === "gym" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Se marca solo cuando terminas un entrenamiento en tu app Gym.</div>' : d.tipo === "gastos" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Se marca solo cuando registras un gasto en tu app Mis Gastos (solo se lee la fecha, nunca el monto).</div>' : d.tipo === "idioma" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Se marca solo cuando completas una lección en tu app Idiomas.</div>' : d.tipo === "check" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Lo marcas tú con un toque: hecho o no hecho.</div>' : '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Con meta numérica: por ejemplo 10 páginas o 8 vasos.</div>') +
       (d.tipo === "cant" ? '<div class="dup"><div><label class="lbl" for="he-m">Meta diaria</label><input id="he-m" type="number" inputmode="numeric" min="1" value="' + esc(d.meta) + '"></div><div><label class="lbl" for="he-u">Unidad</label><input id="he-u" value="' + esc(d.un) + '" placeholder="páginas, vasos, min"></div></div>' : "") +
       '<label class="lbl">¿Con qué frecuencia?</label><div class="seg"><button class="' + (f.t === "dia" ? "on" : "") + '" data-a="hfrec" data-v="dia">Cada día</button><button class="' + (f.t === "dias" ? "on" : "") + '" data-a="hfrec" data-v="dias">Días fijos</button><button class="' + (f.t === "sem" ? "on" : "") + '" data-a="hfrec" data-v="sem">Por semana</button></div>' +
       (f.t === "dias" ? '<div class="dchips">' + dn.map(function (x, i) { return '<button class="' + (f.dias.indexOf(i + 1) >= 0 ? "on" : "") + '" data-a="hdia" data-d="' + (i + 1) + '" aria-pressed="' + (f.dias.indexOf(i + 1) >= 0) + '" aria-label="' + H.DIAS[i] + '">' + x + "</button>"; }).join("") + "</div>" : "") +
@@ -638,10 +690,11 @@ function conexionFila(tipo, em, app, plantilla) {
   function ajustes() {
     var url = db.sync.url, n = Object.keys(db.pend).length;
     abrir('<h3>Ajustes</h3><label class="lbl">Acceso</label><div id="acc"></div><label class="lbl">Sincronización</label><div style="font-size:14px;color:var(--mut);line-height:1.5">' + esc(!cfg().token ? "Sin vincular" : S.sync || (db.sync.ok ? "Al día" : "Lista para sincronizar")) + " · pendientes: " + n + '</div><div class="dup" style="margin-top:8px"><button class="btn sec" style="margin:0" data-a="sync">Sincronizar</button>' + (url ? '<a class="btn sec" style="margin:0" target="_blank" rel="noopener" href="' + esc(url) + '">Mi hoja</a>' : "") + "</div>" +
-      '<label class="lbl">Avisos dentro de la app</label><label class="sw"><input type="checkbox" id="aj-rec"' + (db.ajustes.rec !== false ? " checked" : "") + ' data-a="rec"> Avisarme de pendientes, hábitos con hora y eventos</label><div style="font-size:13px;color:var(--mut);margin-top:6px;line-height:1.45">Los avisos aparecen mientras la app está abierta. El iPhone no permite avisos con la app cerrada sin un servidor de notificaciones.</div>' +
-      '<label class="lbl" for="aj-cierre">Aviso para cerrar el día (vacío = sin aviso)</label><input id="aj-cierre" type="time" value="' + esc(db.ajustes.cierre === undefined ? "21:00" : db.ajustes.cierre) + '"><label class="sw"><input type="checkbox" id="aj-rev"' + (db.ajustes.rev !== false ? " checked" : "") + ' data-a="revaj"> Recordarme la revisión semanal los domingos (6 pm)</label><label class="lbl">Conexiones con tus apps</label><div class="lista">' + conexionFila("gym", "💪", "Gym", "Ir al gym") + conexionFila("idioma", "🗣️", "Idiomas", "Estudiar un idioma") + '</div><label class="lbl">Google Calendar</label><div style="font-size:14px;color:var(--mut);line-height:1.5">' + (S.evErr ? "Problema: " + esc(S.evErr) : S.ev.length ? "Conectado · " + S.ev.length + " evento(s) cargados" : "Se leen tus calendarios propios y los eventos nuevos se crean en el principal.") + '</div><button class="btn sec" data-a="evrec" style="margin-top:8px">Recargar calendario</button>' +
+      '<label class="lbl">Avisos dentro de la app</label><label class="sw"><input type="checkbox" id="aj-rec"' + (db.ajustes.rec !== false ? " checked" : "") + ' data-a="rec"> Avisarme de pendientes, hábitos con hora y eventos</label><div style="font-size:13px;color:var(--mut);margin-top:6px;line-height:1.45">Estos avisos aparecen mientras la app está abierta. Para que el iPhone te avise con la app cerrada usa «Avisos en tu iPhone (Google Calendar)», más abajo.</div>' +
+      '<label class="lbl" for="aj-cierre">Aviso para cerrar el día (vacío = sin aviso)</label><input id="aj-cierre" type="time" value="' + esc(db.ajustes.cierre === undefined ? "21:00" : db.ajustes.cierre) + '"><label class="sw"><input type="checkbox" id="aj-rev"' + (db.ajustes.rev !== false ? " checked" : "") + ' data-a="revaj"> Recordarme la revisión semanal los domingos (6 pm)</label><label class="lbl">Conexiones con tus apps</label><div class="lista">' + conexionFila("gym", "💪", "Gym", "Ir al gym") + conexionFila("idioma", "🗣️", "Idiomas", "Estudiar un idioma") + conexionFila("gastos", "💳", "Mis Gastos", "Anotar mis gastos") + '</div><label class="lbl">Avisos en tu iPhone (Google Calendar)</label><label class="sw"><input type="checkbox" id="aj-cal"' + (db.ajustes.cal !== false ? " checked" : "") + ' data-a="calaj"> Crear un evento con alarma para los pendientes que tengan fecha y hora</label><div style="font-size:13px;color:var(--mut);margin-top:6px;line-height:1.45">Así el iPhone te avisa aunque la app esté cerrada. Usa el aviso que elijas en cada pendiente (si no, 10 min antes).' + (S.calErr ? ' <b>Problema: ' + esc(S.calErr === "operacion_desconocida" ? "actualiza el script de Fergard (v0.12.0)" : S.calErr) + "</b>" : "") + '</div><label class="lbl">Resumen por correo</label><div id="resbox" style="font-size:14px;color:var(--mut)">Cargando…</div><label class="lbl">Google Calendar</label><div style="font-size:14px;color:var(--mut);line-height:1.5">' + (S.evErr ? "Problema: " + esc(S.evErr) : S.ev.length ? "Conectado · " + S.ev.length + " evento(s) cargados" : "Se leen tus calendarios propios y los eventos nuevos se crean en el principal.") + '</div><button class="btn sec" data-a="evrec" style="margin-top:8px">Recargar calendario</button>' +
       '<label class="lbl">Espacio en este dispositivo</label><div style="font-size:14px;color:var(--mut);line-height:1.5">Solo una copia pequeña de tus datos y la cáscara de la app.</div><button class="btn sec" data-a="liberar" style="margin-top:8px">Liberar espacio</button><div style="font-size:12.5px;color:var(--mut);margin-top:18px;text-align:center">Hábitos v' + VERSION + '</div><button class="btn sec" data-a="mcerrar">Cerrar</button>');
     if (window.FergardAcceso) FergardAcceso.panel($("#acc"));
+    resPintar();
   }
 
   /* ---------- avisos dentro de la app ---------- */
@@ -692,7 +745,7 @@ function conexionFila(tipo, em, app, plantilla) {
       var h = d.id ? db.habitos[d.id] : { id: H.uid(), ini: H.hoy(), orden: Object.keys(db.habitos).length };
       h.n = d.n.trim(); h.e = d.e; h.tipo = d.tipo; if (d.tipo === "gym") S.gymT = 0; h.meta = d.meta; h.un = d.un; h.frec = fr; h.hora = d.hora || ""; db.habitos[h.id] = h; touch("habito", h.id, h);
       Object.keys(db.registros).forEach(function (k) { var r = db.registros[k]; if (r.h === h.id && (r.hn !== h.n || r.meta !== h.meta)) { r.hn = h.n; r.meta = h.meta; touch("registro", k, r); } });
-      cerrar(); pintar(); toast("Hábito guardado"); if (h.tipo === "gym") syncGym(); if (h.tipo === "idioma") { S.idiT = 0; syncIdiomas(true); }
+      cerrar(); pintar(); toast("Hábito guardado"); if (h.tipo === "gym") syncGym(); if (h.tipo === "idioma") { S.idiT = 0; syncIdiomas(true); } if (h.tipo === "gastos") syncGastos(true);
     },
     harch: function () { var h = db.habitos[S.hd.id]; h.arch = !h.arch; touch("habito", h.id, h); cerrar(); pintar(); toast(h.arch ? "Hábito archivado" : "Hábito restaurado"); },
     hdel: function () { if (!confirm("¿Eliminar este hábito y su historial?")) return; var id = S.hd.id; Object.keys(db.registros).forEach(function (k) { if (db.registros[k].h === id) quitar("registro", k); }); quitar("habito", id); cerrar(); pintar(); },
@@ -702,7 +755,7 @@ function conexionFila(tipo, em, app, plantilla) {
     tsave: function () { var t = leerTE(); if (!t) return; touch("tarea", t.id, t); cerrar(); pintar(); toast("Guardado"); },
     tdel: function () { quitar("tarea", S.td); cerrar(); pintar(); },
     tmanana: function () { var t = leerTE(); if (!t) return; t.f = H.addD(t.f || H.hoy(), 1); touch("tarea", t.id, t); cerrar(); pintar(); toast("Postergado 1 día"); },
-    tcal: function () { var t = leerTE(); if (!t) return; if (!t.f) { toast("Ponle una fecha primero"); return; } touch("tarea", t.id, t); crearEvento(t.t, t.f, t.h); },
+    tcal: function () { var t = leerTE(); if (!t) return; if (!t.f) { toast("Ponle una fecha primero"); return; } if (t.cid) { toast("Ya tiene su aviso en Google Calendar"); return; } touch("tarea", t.id, t); crearEvento(t.t, t.f, t.h); },
     tsubadd: function () { var c = $("#te-s"), d = document.createElement("div"); d.innerHTML = subHtml({ t: "", ok: false }); c.appendChild(d.firstChild); var i = $$("input", c); i[i.length - 1].focus(); },
     tsubchk: function (el) { el.classList.toggle("on"); },
     tsubdel: function (el) { el.closest(".sub").remove(); },
@@ -717,6 +770,9 @@ function conexionFila(tipo, em, app, plantilla) {
     "qa-evento": function () { parseQA(false); var r = S.qa.r; if (!r.titulo) { toast("Escribe el título del evento"); return; } if (!r.fecha) r.fecha = H.hoy(); crearEvento(r.titulo, r.fecha, r.hora).then(function (ok) { if (ok) { cerrar(); } }); },
     sync: function () { sync(true).then(ajustes); },
     rec: function (el) { db.ajustes.rec = el.checked; touch("ajustes", "a", db.ajustes); },
+    calaj: function (el) { db.ajustes.cal = el.checked; touch("ajustes", "a", db.ajustes); toast(el.checked ? "Los pendientes con hora crearán su aviso en Calendar" : "Avisos en Calendar desactivados"); },
+    reson: function () { resConfig(); }, reshora: function () { resConfig(); },
+    resprueba: function () { var c = cfg(); toast("Enviando…"); post(c.url, { op: "resumen_probar", app: "habitos", token: c.token }).then(function (r) { toast(r && r.ok ? "Te lo envié a tu correo (" + r.hechos + "/" + r.total + " hábitos hoy)" : r && r.error === "operacion_desconocida" ? "Actualiza el script (v0.12.0)" : "No se pudo enviar. Ejecuta «preparar» en el script y publica una versión nueva"); }).catch(function () { toast("Sin conexión"); }); },
     evrec: function () { S.evR = {}; S.evErr = ""; var r = rangoVista(); Promise.all([cargarEv(r[0], r[1], true), cargarEv(H.hoy(), H.addD(H.hoy(), 1), true)]).then(function () { toast(S.evErr ? "Problema: " + S.evErr : "Calendario actualizado"); ajustes(); }); },
     liberar: function () {
       if (Object.keys(db.pend).length) { toast("Hay datos sin subir: espera a que se sincronicen"); return; }
@@ -785,7 +841,7 @@ function conexionFila(tipo, em, app, plantilla) {
       .then(function () { return navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }) : null; }).then(fin, fin);
   } });
   Object.assign(A, {
-    crearGym: function () { crearDe("gym"); }, crearIdi: function () { crearDe("idioma"); },
+    crearGym: function () { crearDe("gym"); }, crearIdi: function () { crearDe("idioma"); }, crearGas: function () { crearDe("gastos"); },
     rgp: function (el) { var k = el.dataset.k, r = REGS[k], v = regVal(H.hoy(), k) || 0; setReg(H.hoy(), k, Math.round((v + r.paso) * 10) / 10); pintar(); },
     rgm: function (el) { var k = el.dataset.k, r = REGS[k], v = regVal(H.hoy(), k) || 0; setReg(H.hoy(), k, Math.max(0, Math.round((v - r.paso) * 10) / 10)); pintar(); },
     rge: function (el) { var k = el.dataset.k, v = +el.dataset.v; setReg(H.hoy(), k, regVal(H.hoy(), k) === v ? null : v); pintar(); },
@@ -819,7 +875,7 @@ function conexionFila(tipo, em, app, plantilla) {
   });
   document.addEventListener("input", function (e) { if (e.target.id === "qa-t") parseQA(true); });
   document.addEventListener("change", function (e) {
-    if (e.target.id === "he-pl" && e.target.value) aplicarPlantilla(e.target.value);
+    if (e.target.id === "he-pl" && e.target.value) aplicarPlantilla(e.target.value); if (e.target.id === "res-h") resConfig();
     if (e.target.id === "me-ii" || e.target.id === "me-ia") { leerME(); pintarME(); if (S.me.idi && !$("#me-n").value.trim()) { $("#me-n").value = (S.me.idi.a === "a1" ? "Terminar el nivel A1 de " : "Unidad " + S.me.idi.a.slice(4) + " de ") + IDI_NOM[S.me.idi.i]; } syncIdiomas(true); }
     if (e.target.id === "dh-t") setDia(H.hoy(), null, e.target.value);
     if (/^g-[0-2]$/.test(e.target.id)) { var dg = dDoc(H.hoy()); dg.g = dg.g || ["", "", ""]; dg.g[+e.target.id.slice(2)] = e.target.value.trim(); guardarDia(dg); }
@@ -843,7 +899,7 @@ function conexionFila(tipo, em, app, plantilla) {
     var vacio = !db.sync.ult && !Object.keys(db.habitos).length && !Object.keys(db.tareas).length; if (vacio && cfg().token) S.cargando = true;
     pintarTabs(); pintar();
     window.HB_DEBUG = { db: function () { return db; }, S: S, A: A, pintar: pintar, revisar: revisar, setEv: function (e) { S.ev = e; pintar(); } };
-    sync(false).then(function () { S.cargando = false; pintar(); cargarEv(H.hoy(), H.addD(H.hoy(), 1)); syncGym(); syncIdiomas(); revisar(); buscarActualizacion(); cargarEv(H.addD(H.hoy(), 2), H.addD(H.hoy(), 30)); });
+    sync(false).then(function () { S.cargando = false; pintar(); cargarEv(H.hoy(), H.addD(H.hoy(), 1)); syncGym(); syncIdiomas(); syncGastos(); revisar(); buscarActualizacion(); cargarEv(H.addD(H.hoy(), 2), H.addD(H.hoy(), 30)); });
     S.enf = enfLeer(); try { S.idiRes = JSON.parse(LS.getItem("hb_idi") || "null"); } catch (e) { S.idiRes = null; } chipEnf(); setInterval(tickEnf, 1000);
     setInterval(function () { if (!document.hidden) { var h = H.hoy(); if (S.lastDay && S.lastDay !== h) { S.dia = h; pintar(); } S.lastDay = h; revisar(); } }, 30000); S.lastDay = H.hoy();
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});

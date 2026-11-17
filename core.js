@@ -55,7 +55,8 @@
     { n: "Entrenar", e: "🏋️", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 4 } }, { n: "Dormir temprano", e: "😴", tipo: "check", meta: 1, un: "", frec: { t: "dia" } },
     { n: "Escribir en el diario", e: "✍️", tipo: "check", meta: 1, un: "", frec: { t: "dia" } }, { n: "Sin redes sociales", e: "📵", tipo: "check", meta: 1, un: "", frec: { t: "dia" } },
     { n: "Ir al gym", e: "💪", tipo: "gym", meta: 1, un: "", frec: { t: "sem", n: 4 } },
-    { n: "Estudiar un idioma", e: "🗣️", tipo: "idioma", meta: 1, un: "", frec: { t: "dia" } }
+    { n: "Estudiar un idioma", e: "🗣️", tipo: "idioma", meta: 1, un: "", frec: { t: "dia" } },
+    { n: "Anotar mis gastos", e: "💳", tipo: "gastos", meta: 1, un: "", frec: { t: "dia" } }
   ];
   /* Ideas de hábitos que practican muchos emprendedores, deportistas y líderes (c = categoría, d = para qué sirve) */
   var IDEAS = [

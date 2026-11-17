@@ -1,7 +1,7 @@
 /* Hábitos · hábitos con meta, pendientes, calendario (Google Calendar) y avisos dentro de la app. Los datos van a tu hoja «Fergard · Hábitos». */
 (function () {
   "use strict";
-  var CFG = window.FG_CFG || {}, VERSION = "0.6.2", DB_KEY = "habitos_db", H = window.HCore;
+  var CFG = window.FG_CFG || {}, VERSION = "0.7.0", DB_KEY = "habitos_db", H = window.HCore;
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var LS = (function () { try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); return localStorage; } catch (e) { var m = {}; return { getItem: function (k) { return m[k] || null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } }; } })();
@@ -51,7 +51,7 @@
     }).catch(function () { S.sync = "Sin conexión · se subirá después"; if (manual) toast("Sin conexión"); }).then(function () { syncing = false; pintarNube(); });
   }
   window.addEventListener("online", function () { sync(false); });
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) { sync(false); S.dia = S.dia || H.hoy(); syncGym(); tickEnf(); revisar(); buscarActualizacion(); } });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { sync(false); S.dia = S.dia || H.hoy(); syncGym(); syncIdiomas(); tickEnf(); revisar(); buscarActualizacion(); } });
 
   function toast(t) { var e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(function () { e.classList.remove("on"); }, 2600); }
   function ico(n) {
@@ -74,7 +74,7 @@
   function subHab(h, sinRacha) {
     var f = H.hoy(), partes = [];
     if (sinRacha && H.cumplido(h, H.valor(db, h.id, f))) partes.push("Hecho");
-    if (h.tipo === "gym") partes.push("💪 Se marca solo con tu app Gym");
+    if (h.tipo === "gym") partes.push("💪 Se marca solo con tu app Gym"); if (h.tipo === "idioma") partes.push("🗣️ Se marca solo con tu app Idiomas");
     if (h.tipo === "cant") partes.push("Meta " + h.meta + " " + esc(h.un || ""));
     if (h.frec && h.frec.t === "sem") partes.push(H.hechosSemana(h, db, f) + "/" + h.frec.n + " esta semana"); else if (h.frec && h.frec.t === "dias") partes.push(esc(H.textoFrec(h)));
     var r = sinRacha ? "" : textoRacha(h); if (r) partes.push(r); if (h.hora) partes.push("Recordatorio a las " + esc(h.hora));
@@ -229,6 +229,7 @@
     return '<div class="big"><div><b>' + ok + "</b><span>Completadas</span></div><div><b>" + (t.length - ok) + "</b><span>Pendientes</span></div><div><b>" + t.length + "</b><span>Total de la semana</span></div></div>";
   }
   function avance(m) {
+    if (m.idi) return idiAvance(m);
     if (!m.hab) return m.act || 0; var h = db.habitos[m.hab]; if (!h) return 0; var desde = m.ini || "0000-00-00", tot = 0;
     Object.keys(db.registros).forEach(function (k) { var r = db.registros[k]; if (r.h !== m.hab) return; Object.keys(r.v).forEach(function (dd) { if (r.m + "-" + dd < desde) return; var v = r.v[dd]; tot += h.tipo === "cant" ? v : (v >= 1 ? 1 : 0); }); });
     return tot;
@@ -236,7 +237,7 @@
   function filaMeta(m) {
     var av = avance(m), obj = m.obj || 1, pc = Math.min(100, Math.round(100 * av / obj)), lograda = av >= obj, f = H.hoy(), extra = "";
     if (m.fin && !lograda) { var dias = Math.round((H.pf(m.fin) - H.pf(f)) / 86400000); extra = dias < 0 ? " · venció el " + fCorto(m.fin) : " · " + dias + " días · necesitas " + (Math.ceil((obj - av) / Math.max(1, dias) * 10) / 10) + "/día"; }
-    var ctl = m.hab ? "" : '<div class="cant"><button data-a="mmenos" data-id="' + esc(m.id) + '" aria-label="Restar">−</button><button class="mas" data-a="mmas" data-id="' + esc(m.id) + '" aria-label="Sumar">+</button></div>';
+    var ctl = (m.hab || m.idi) ? "" : '<div class="cant"><button data-a="mmenos" data-id="' + esc(m.id) + '" aria-label="Restar">−</button><button class="mas" data-a="mmas" data-id="' + esc(m.id) + '" aria-label="Sumar">+</button></div>';
     return '<div class="fila" style="display:block" role="button" tabindex="0" data-a="medit" data-id="' + esc(m.id) + '"><div style="display:flex;align-items:center;gap:12px"><div class="em">' + esc(m.e || "🎯") + '</div><div class="tx"><div class="tt" style="white-space:normal">' + esc(m.n) + '</div><div class="st">' + av + " / " + obj + " " + esc(m.un || "") + (lograda ? ' · <span class="racha">¡Lograda!</span>' : esc(extra)) + "</div></div>" + ctl + '</div><div class="barra2"><i style="width:' + pc + '%"></i></div></div>';
   }
   function vMetas(sg) {
@@ -246,16 +247,16 @@
   function mEditor(id) {
     var m = id ? db.metas[id] : null;
     S.me = m ? JSON.parse(JSON.stringify(m)) : { id: null, n: "", e: "🎯", hab: "", obj: 10, un: "", fin: "", ini: H.hoy(), act: 0, lig: Object.keys(db.habitos).length > 0 };
-    if (m) S.me.lig = !!m.hab; pintarME();
+    if (m) S.me.lig = !!m.hab; S.me.modo = m ? (m.idi ? "idi" : m.hab ? "hab" : "man") : (S.me.lig ? "hab" : "man"); if (m && m.idi) S.me.idi = m.idi; if (!S.me.idi) S.me.idi = { i: "en", a: "a1" }; pintarME();
   }
   function pintarME() {
     var d = S.me, hs = listaHab().filter(function (h) { return !h.arch; });
     abrir("<h3>" + (d.id ? "Editar meta" : "Nueva meta") + '</h3><div class="dup" style="grid-template-columns:70px 1fr"><div style="flex:0 0 76px"><label class="lbl" for="me-e">Icono</label><input id="me-e" value="' + esc(d.e) + '" maxlength="4" style="text-align:center;font-size:22px"></div><div><label class="lbl" for="me-n">Meta</label><input id="me-n" value="' + esc(d.n) + '" placeholder="Leer 12 libros este año"></div></div>' +
-      '<label class="lbl">¿Cómo avanza?</label><div class="seg"><button class="' + (d.lig ? "on" : "") + '" data-a="mlig" data-v="1">Con un hábito</button><button class="' + (!d.lig ? "on" : "") + '" data-a="mlig" data-v="0">A mano</button></div>' +
-      (d.lig ? (hs.length ? '<label class="lbl" for="me-h">Hábito</label><select id="me-h">' + hs.map(function (h) { return '<option value="' + esc(h.id) + '"' + (d.hab === h.id ? " selected" : "") + ">" + esc((h.e || "") + " " + h.n) + "</option>"; }).join("") + '</select><label class="lbl" for="me-i">Contar desde</label><input id="me-i" type="date" value="' + esc(d.ini) + '">' : '<div class="vacio">Primero crea un hábito, o elige «A mano».</div>') : '<label class="lbl" for="me-u">Unidad</label><input id="me-u" value="' + esc(d.un) + '" placeholder="libros, km, soles…"><label class="lbl" for="me-a">Avance actual</label><input id="me-a" type="number" inputmode="decimal" value="' + esc(d.act || 0) + '">') +
+      '<label class="lbl">¿Cómo avanza?</label><div class="seg"><button class="' + (d.modo === "hab" ? "on" : "") + '" data-a="mlig" data-v="1">Un hábito</button><button class="' + (d.modo === "man" ? "on" : "") + '" data-a="mlig" data-v="0">A mano</button><button class="' + (d.modo === "idi" ? "on" : "") + '" data-a="mlig" data-v="2">Idiomas</button></div>' +
+      (d.modo === "idi" ? idiForm(d) : d.lig ? (hs.length ? '<label class="lbl" for="me-h">Hábito</label><select id="me-h">' + hs.map(function (h) { return '<option value="' + esc(h.id) + '"' + (d.hab === h.id ? " selected" : "") + ">" + esc((h.e || "") + " " + h.n) + "</option>"; }).join("") + '</select><label class="lbl" for="me-i">Contar desde</label><input id="me-i" type="date" value="' + esc(d.ini) + '">' : '<div class="vacio">Primero crea un hábito, o elige «A mano».</div>') : '<label class="lbl" for="me-u">Unidad</label><input id="me-u" value="' + esc(d.un) + '" placeholder="libros, km, soles…"><label class="lbl" for="me-a">Avance actual</label><input id="me-a" type="number" inputmode="decimal" value="' + esc(d.act || 0) + '">') +
       '<div class="dup"><div><label class="lbl" for="me-o">Objetivo</label><input id="me-o" type="number" inputmode="decimal" min="1" value="' + esc(d.obj) + '"></div><div><label class="lbl" for="me-f">Fecha límite (opcional)</label><input id="me-f" type="date" value="' + esc(d.fin || "") + '"></div></div><button class="btn" data-a="msave">Guardar</button>' + (d.id ? '<button class="btn bad" data-a="mdel">Eliminar</button>' : ""));
   }
-  function leerME() { var d = S.me; if (!d || !$("#me-n")) return; d.n = $("#me-n").value; d.e = $("#me-e").value.trim() || "🎯"; d.obj = +$("#me-o").value || 1; d.fin = $("#me-f").value; if ($("#me-h")) { d.hab = $("#me-h").value; d.ini = $("#me-i").value || H.hoy(); } if ($("#me-u")) d.un = $("#me-u").value.trim(); if ($("#me-a")) d.act = +$("#me-a").value || 0; }
+  function leerME() { var d = S.me; if (!d || !$("#me-n")) return; d.n = $("#me-n").value; d.e = $("#me-e").value.trim() || "🎯"; d.obj = +$("#me-o").value || 1; d.fin = $("#me-f").value; if (d.modo === "idi" && $("#me-ii")) { d.idi = { i: $("#me-ii").value, a: $("#me-ia").value }; d.obj = d.idi.a === "a1" ? 50 : 5; } if ($("#me-h")) { d.hab = $("#me-h").value; d.ini = $("#me-i").value || H.hoy(); } if ($("#me-u")) d.un = $("#me-u").value.trim(); if ($("#me-a")) d.act = +$("#me-a").value || 0; }
   var LISTAS_BASE = ["Trabajo", "Casa", "Personales", "Otros"];
   function opcionesListas(sel) {
     var o = {}, extra = []; listaTar().forEach(function (t) { if (t.l && t.l !== "Notas" && LISTAS_BASE.indexOf(t.l) < 0) o[t.l] = 1; }); (db.ajustes.listas || []).forEach(function (l) { if (LISTAS_BASE.indexOf(l) < 0) o[l] = 1; }); if (sel && LISTAS_BASE.indexOf(sel) < 0) o[sel] = 1;
@@ -498,6 +499,51 @@
       var b = document.createElement("button"); b.id = "upd"; b.setAttribute("data-a", "actualizar"); b.innerHTML = "<b>Hay una versión nueva (" + esc(m[1]) + ")</b><span>Toca para actualizar</span>"; document.body.appendChild(b);
     }).catch(function () {});
   }
+/* ---- plantillas en lista, y conexión con Idiomas ---- */
+  var IDI_NOM = { en: "Inglés", pt: "Portugués", it: "Italiano" };
+  var IDI_UNI = ["Saludos y presentaciones", "Números y datos personales", "En el café", "Mi familia", "La hora, los días y mi rutina", "La casa", "La ciudad y direcciones", "Compras y dinero", "Gustos y pasatiempos", "Ahora y planes"];
+  function plantillaSelect() {
+    var cats = {}; H.IDEAS.forEach(function (p, i) { (cats[p.c] = cats[p.c] || []).push([p, i]); });
+    var of = function (p, v) { return '<option value="' + v + '">' + esc(p.e + " " + p.n) + "</option>"; };
+    return '<label class="lbl" for="he-pl">Empezar con una plantilla (opcional)</label><select id="he-pl"><option value="">Elegir de la lista…</option><optgroup label="Básicas">' + H.PLANTILLAS.map(function (p, i) { return of(p, "p:" + i); }).join("") + "</optgroup>" +
+      Object.keys(cats).map(function (c) { return '<optgroup label="' + esc(c) + '">' + cats[c].map(function (x) { return of(x[0], "i:" + x[1]); }).join("") + "</optgroup>"; }).join("") + "</select>";
+  }
+  function aplicarPlantilla(v) {
+    var p = v.charAt(0) === "p" ? H.PLANTILLAS[+v.slice(2)] : H.IDEAS[+v.slice(2)]; if (!p) return; leerHE();
+    S.hd.n = p.n; S.hd.e = p.e; S.hd.tipo = p.tipo; S.hd.meta = p.meta; S.hd.un = p.un; S.hd.frec = JSON.parse(JSON.stringify(p.frec)); S.hd.frec.dias = S.hd.frec.dias || []; S.hd.frec.n = S.hd.frec.n || 3; pintarHE();
+  }
+  function syncIdiomas(fuerza) {
+    var c = cfg(); if (!c.token || !c.url) return Promise.resolve();
+    var hs = listaHab().filter(function (h) { return h.tipo === "idioma" && !h.arch; }), hayMeta = Object.keys(db.metas).some(function (k) { return db.metas[k].idi; });
+    if (!hs.length && !hayMeta) return Promise.resolve();
+    if (!fuerza && S.idiT && Date.now() - S.idiT < 120000) return Promise.resolve(); S.idiT = Date.now();
+    var f = H.hoy();
+    return post(c.url, { op: "idiomas_resumen", app: "habitos", token: c.token, desde: H.addD(f, -60), hasta: f }).then(function (r) {
+      if (!r || !r.ok) { S.idiErr = (r && r.error) || "error"; return; } S.idiErr = ""; S.idiRes = { lec: r.lecciones || {}, ex: r.examenes || {} }; try { LS.setItem("hb_idi", JSON.stringify(S.idiRes)); } catch (e) {}
+      var n = 0; (r.dias || []).forEach(function (d) { hs.forEach(function (h) { if (H.valor(db, h.id, d.f) === 0) { setValor(h, d.f, 1); n++; } }); });
+      pintar(); if (n) toast("Idiomas: " + n + (n === 1 ? " día marcado" : " días marcados"));
+    }).catch(function () {});
+  }
+  function idiAvance(m) {
+    var r = S.idiRes; if (!r || !m.idi) return 0; var i = m.idi.i, a = m.idi.a, tot = 0, u;
+    if (a === "a1") { for (u = 1; u <= 10; u++) tot += r.lec[i + "-a1-u" + u] || 0; return tot; }
+    return r.lec[i + "-" + a] || 0;
+  }
+  function idiForm(d) {
+    var di = d.idi || { i: "en", a: "a1" };
+    return '<label class="lbl" for="me-ii">Idioma</label><select id="me-ii">' + Object.keys(IDI_NOM).map(function (k) { return '<option value="' + k + '"' + (di.i === k ? " selected" : "") + ">" + IDI_NOM[k] + "</option>"; }).join("") + '</select><label class="lbl" for="me-ia">¿Qué quieres lograr?</label><select id="me-ia"><option value="a1"' + (di.a === "a1" ? " selected" : "") + ">Terminar todo el nivel A1 (50 lecciones)</option>" + IDI_UNI.map(function (t, n) { return '<option value="a1-u' + (n + 1) + '"' + (di.a === "a1-u" + (n + 1) ? " selected" : "") + ">Unidad " + (n + 1) + " · " + esc(t) + " (5 lecciones)</option>"; }).join("") + '</select><div class="st" style="color:var(--mut);font-weight:600;margin:6px 2px 0">Avanza sola con cada lección que completes en tu app Idiomas.</div>';
+  }
+  function crearDe(tipo) {
+    var p = H.PLANTILLAS.filter(function (x) { return x.tipo === tipo; })[0]; if (!p) return;
+    var h = { id: H.uid(), n: p.n, e: p.e, tipo: p.tipo, meta: p.meta, un: p.un, frec: JSON.parse(JSON.stringify(p.frec)), hora: "", ini: H.hoy(), orden: Object.keys(db.habitos).length };
+    db.habitos[h.id] = h; touch("habito", h.id, h); toast("Hábito creado: " + p.n); if (tipo === "gym") { S.gymT = 0; syncGym(); } else { S.idiT = 0; syncIdiomas(true); } ajustes();
+  }
+function conexionFila(tipo, em, app, plantilla) {
+    var hay = listaHab().some(function (h) { return h.tipo === tipo && !h.arch; }), err = tipo === "gym" ? S.gymErr : S.idiErr, ver = tipo === "gym" ? "v0.8.0" : "v0.11.0", est, btn = "";
+    if (!hay) { est = "Aún no tienes el hábito. Se marca solo con tu app " + app + "."; btn = '<button class="btn sec" style="margin:8px 0 0;height:44px" data-a="crear' + (tipo === "gym" ? "Gym" : "Idi") + '">Crear hábito «' + plantilla + '»</button>'; }
+    else if (err === "operacion_desconocida") est = "Actualiza el script de Fergard (" + ver + " o más nueva)"; else if (err) est = "Problema: " + esc(err); else est = "Conectado ✓ · se marca solo con tus sesiones de " + app;
+    return '<div class="fila" style="display:block"><div style="display:flex;gap:10px;align-items:center"><div class="em">' + em + '</div><div class="tx"><div class="tt">' + app + '</div><div class="st" style="white-space:normal">' + est + "</div></div></div>" + btn + "</div>";
+  }
   var TABS = [["hoy", "Hoy"], ["pend", "Pendientes"], ["cal", "Calendario"], ["hab", "Hábitos"], ["prog", "Progreso"]];
   function pintarTabs() { $("#tabs").innerHTML = TABS.map(function (t) { return '<button class="' + (S.tab === t[0] ? "on" : "") + '" data-a="tab" data-t="' + t[0] + '" aria-current="' + (S.tab === t[0]) + '">' + ico(t[0]) + t[1] + "</button>"; }).join(""); }
   function pintar() {
@@ -566,9 +612,9 @@
   }
   function pintarHE() {
     var d = S.hd, f = d.frec, dn = ["L", "M", "M", "J", "V", "S", "D"];
-    abrir('<h3>' + (d.id ? "Editar hábito" : "Nuevo hábito") + "</h3>" + (d.id ? "" : '<div class="plant">' + H.PLANTILLAS.map(function (p, i) { return '<button data-a="hpl" data-i="' + i + '">' + p.e + " " + esc(p.n) + "</button>"; }).join("") + "</div>") +
+    abrir('<h3>' + (d.id ? "Editar hábito" : "Nuevo hábito") + "</h3>" + (d.id ? "" : plantillaSelect()) +
       '<div class="dup" style="grid-template-columns:70px 1fr"><div style="flex:0 0 76px"><label class="lbl" for="he-e">Icono</label><input id="he-e" value="' + esc(d.e) + '" maxlength="4" style="text-align:center;font-size:22px"></div><div><label class="lbl" for="he-n">Nombre</label><input id="he-n" value="' + esc(d.n) + '" placeholder="Leer, caminar, meditar…"></div></div>' +
-      '<label class="lbl">¿Cómo se mide?</label><div class="seg"><button class="' + (d.tipo === "check" ? "on" : "") + '" data-a="htipo" data-v="check">Hecho / no hecho</button><button class="' + (d.tipo === "cant" ? "on" : "") + '" data-a="htipo" data-v="cant">Con cantidad</button><button class="' + (d.tipo === "gym" ? "on" : "") + '" data-a="htipo" data-v="gym">Ir al gym</button></div>' + (d.tipo === "gym" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Se marca solo cuando terminas un entrenamiento en tu app Gym.</div>' : "") +
+      '<label class="lbl">¿Cómo se mide?</label><div class="seg"><button class="' + (d.tipo === "check" ? "on" : "") + '" data-a="htipo" data-v="check">Casilla</button><button class="' + (d.tipo === "cant" ? "on" : "") + '" data-a="htipo" data-v="cant">Cantidad</button><button class="' + (d.tipo === "gym" ? "on" : "") + '" data-a="htipo" data-v="gym">Gym</button><button class="' + (d.tipo === "idioma" ? "on" : "") + '" data-a="htipo" data-v="idioma">Idiomas</button></div>' + (d.tipo === "gym" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Se marca solo cuando terminas un entrenamiento en tu app Gym.</div>' : d.tipo === "idioma" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Se marca solo cuando completas una lección en tu app Idiomas.</div>' : d.tipo === "check" ? '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Lo marcas tú con un toque: hecho o no hecho.</div>' : '<div class="st" style="color:var(--mut);font-weight:600;margin:-4px 2px 6px">Con meta numérica: por ejemplo 10 páginas o 8 vasos.</div>') +
       (d.tipo === "cant" ? '<div class="dup"><div><label class="lbl" for="he-m">Meta diaria</label><input id="he-m" type="number" inputmode="numeric" min="1" value="' + esc(d.meta) + '"></div><div><label class="lbl" for="he-u">Unidad</label><input id="he-u" value="' + esc(d.un) + '" placeholder="páginas, vasos, min"></div></div>' : "") +
       '<label class="lbl">¿Con qué frecuencia?</label><div class="seg"><button class="' + (f.t === "dia" ? "on" : "") + '" data-a="hfrec" data-v="dia">Cada día</button><button class="' + (f.t === "dias" ? "on" : "") + '" data-a="hfrec" data-v="dias">Días fijos</button><button class="' + (f.t === "sem" ? "on" : "") + '" data-a="hfrec" data-v="sem">Por semana</button></div>' +
       (f.t === "dias" ? '<div class="dchips">' + dn.map(function (x, i) { return '<button class="' + (f.dias.indexOf(i + 1) >= 0 ? "on" : "") + '" data-a="hdia" data-d="' + (i + 1) + '" aria-pressed="' + (f.dias.indexOf(i + 1) >= 0) + '" aria-label="' + H.DIAS[i] + '">' + x + "</button>"; }).join("") + "</div>" : "") +
@@ -593,7 +639,7 @@
     var url = db.sync.url, n = Object.keys(db.pend).length;
     abrir('<h3>Ajustes</h3><label class="lbl">Acceso</label><div id="acc"></div><label class="lbl">Sincronización</label><div style="font-size:14px;color:var(--mut);line-height:1.5">' + esc(!cfg().token ? "Sin vincular" : S.sync || (db.sync.ok ? "Al día" : "Lista para sincronizar")) + " · pendientes: " + n + '</div><div class="dup" style="margin-top:8px"><button class="btn sec" style="margin:0" data-a="sync">Sincronizar</button>' + (url ? '<a class="btn sec" style="margin:0" target="_blank" rel="noopener" href="' + esc(url) + '">Mi hoja</a>' : "") + "</div>" +
       '<label class="lbl">Avisos dentro de la app</label><label class="sw"><input type="checkbox" id="aj-rec"' + (db.ajustes.rec !== false ? " checked" : "") + ' data-a="rec"> Avisarme de pendientes, hábitos con hora y eventos</label><div style="font-size:13px;color:var(--mut);margin-top:6px;line-height:1.45">Los avisos aparecen mientras la app está abierta. El iPhone no permite avisos con la app cerrada sin un servidor de notificaciones.</div>' +
-      '<label class="lbl" for="aj-cierre">Aviso para cerrar el día (vacío = sin aviso)</label><input id="aj-cierre" type="time" value="' + esc(db.ajustes.cierre === undefined ? "21:00" : db.ajustes.cierre) + '"><label class="sw"><input type="checkbox" id="aj-rev"' + (db.ajustes.rev !== false ? " checked" : "") + ' data-a="revaj"> Recordarme la revisión semanal los domingos (6 pm)</label><label class="lbl">Google Calendar</label><div style="font-size:14px;color:var(--mut);line-height:1.5">' + (S.evErr ? "Problema: " + esc(S.evErr) : S.ev.length ? "Conectado · " + S.ev.length + " evento(s) cargados" : "Se leen tus calendarios propios y los eventos nuevos se crean en el principal.") + '</div><button class="btn sec" data-a="evrec" style="margin-top:8px">Recargar calendario</button>' +
+      '<label class="lbl" for="aj-cierre">Aviso para cerrar el día (vacío = sin aviso)</label><input id="aj-cierre" type="time" value="' + esc(db.ajustes.cierre === undefined ? "21:00" : db.ajustes.cierre) + '"><label class="sw"><input type="checkbox" id="aj-rev"' + (db.ajustes.rev !== false ? " checked" : "") + ' data-a="revaj"> Recordarme la revisión semanal los domingos (6 pm)</label><label class="lbl">Conexiones con tus apps</label><div class="lista">' + conexionFila("gym", "💪", "Gym", "Ir al gym") + conexionFila("idioma", "🗣️", "Idiomas", "Estudiar un idioma") + '</div><label class="lbl">Google Calendar</label><div style="font-size:14px;color:var(--mut);line-height:1.5">' + (S.evErr ? "Problema: " + esc(S.evErr) : S.ev.length ? "Conectado · " + S.ev.length + " evento(s) cargados" : "Se leen tus calendarios propios y los eventos nuevos se crean en el principal.") + '</div><button class="btn sec" data-a="evrec" style="margin-top:8px">Recargar calendario</button>' +
       '<label class="lbl">Espacio en este dispositivo</label><div style="font-size:14px;color:var(--mut);line-height:1.5">Solo una copia pequeña de tus datos y la cáscara de la app.</div><button class="btn sec" data-a="liberar" style="margin-top:8px">Liberar espacio</button><div style="font-size:12.5px;color:var(--mut);margin-top:18px;text-align:center">Hábitos v' + VERSION + '</div><button class="btn sec" data-a="mcerrar">Cerrar</button>');
     if (window.FergardAcceso) FergardAcceso.panel($("#acc"));
   }
@@ -646,7 +692,7 @@
       var h = d.id ? db.habitos[d.id] : { id: H.uid(), ini: H.hoy(), orden: Object.keys(db.habitos).length };
       h.n = d.n.trim(); h.e = d.e; h.tipo = d.tipo; if (d.tipo === "gym") S.gymT = 0; h.meta = d.meta; h.un = d.un; h.frec = fr; h.hora = d.hora || ""; db.habitos[h.id] = h; touch("habito", h.id, h);
       Object.keys(db.registros).forEach(function (k) { var r = db.registros[k]; if (r.h === h.id && (r.hn !== h.n || r.meta !== h.meta)) { r.hn = h.n; r.meta = h.meta; touch("registro", k, r); } });
-      cerrar(); pintar(); toast("Hábito guardado"); if (h.tipo === "gym") syncGym();
+      cerrar(); pintar(); toast("Hábito guardado"); if (h.tipo === "gym") syncGym(); if (h.tipo === "idioma") { S.idiT = 0; syncIdiomas(true); }
     },
     harch: function () { var h = db.habitos[S.hd.id]; h.arch = !h.arch; touch("habito", h.id, h); cerrar(); pintar(); toast(h.arch ? "Hábito archivado" : "Hábito restaurado"); },
     hdel: function () { if (!confirm("¿Eliminar este hábito y su historial?")) return; var id = S.hd.id; Object.keys(db.registros).forEach(function (k) { if (db.registros[k].h === id) quitar("registro", k); }); quitar("habito", id); cerrar(); pintar(); },
@@ -688,11 +734,11 @@
   Object.assign(A, {
     hv: function (el) { S.hv = el.dataset.v; pintar(); }, pv: function (el) { S.pv = el.dataset.v; pintar(); },
     mnew: function () { mEditor(null); }, medit: function (el) { mEditor(el.dataset.id); },
-    mlig: function (el) { leerME(); S.me.lig = el.dataset.v === "1"; if (!S.me.lig) S.me.hab = ""; pintarME(); },
+    mlig: function (el) { leerME(); S.me.modo = { "1": "hab", "0": "man", "2": "idi" }[el.dataset.v]; S.me.lig = S.me.modo === "hab"; if (!S.me.lig) S.me.hab = ""; if (S.me.modo === "idi") { S.me.idi = S.me.idi || { i: "en", a: "a1" }; S.me.obj = S.me.idi.a === "a1" ? 50 : 5; } pintarME(); },
     msave: function () {
       leerME(); var d = S.me; if (!d.n.trim()) { toast("Ponle nombre a la meta"); return; } if (d.lig && !d.hab) { toast("Elige un hábito o cambia a «A mano»"); return; }
       var m = d.id ? db.metas[d.id] : { id: H.uid() }, h = d.lig ? db.habitos[d.hab] : null;
-      m.n = d.n.trim(); m.e = d.e; m.obj = d.obj; m.fin = d.fin; m.hab = d.lig ? d.hab : ""; m.hn = h ? h.n : ""; m.un = h ? (h.tipo === "cant" ? h.un : "veces") : d.un; m.ini = d.ini || H.hoy(); m.act = d.lig ? 0 : d.act; db.metas[m.id] = m; touch("meta", m.id, m); cerrar(); pintar(); toast("Meta guardada");
+      m.n = d.n.trim(); m.e = d.e; m.obj = d.obj; m.fin = d.fin; m.hab = d.lig ? d.hab : ""; m.hn = h ? h.n : ""; m.un = h ? (h.tipo === "cant" ? h.un : "veces") : d.un; m.ini = d.ini || H.hoy(); m.act = d.lig ? 0 : d.act; if (d.modo === "idi") { m.idi = d.idi; m.hab = ""; m.hn = ""; m.un = "lecciones"; m.act = 0; m.obj = d.obj; if (!m.n) m.n = "Idiomas"; } else delete m.idi; db.metas[m.id] = m; touch("meta", m.id, m); cerrar(); pintar(); toast("Meta guardada");
     },
     mdel: function () { if (!confirm("¿Eliminar esta meta?")) return; quitar("meta", S.me.id); cerrar(); pintar(); },
     mmas: function (el) { var m = db.metas[el.dataset.id]; m.act = (m.act || 0) + 1; touch("meta", m.id, m); pintar(); },
@@ -739,6 +785,7 @@
       .then(function () { return navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }) : null; }).then(fin, fin);
   } });
   Object.assign(A, {
+    crearGym: function () { crearDe("gym"); }, crearIdi: function () { crearDe("idioma"); },
     rgp: function (el) { var k = el.dataset.k, r = REGS[k], v = regVal(H.hoy(), k) || 0; setReg(H.hoy(), k, Math.round((v + r.paso) * 10) / 10); pintar(); },
     rgm: function (el) { var k = el.dataset.k, r = REGS[k], v = regVal(H.hoy(), k) || 0; setReg(H.hoy(), k, Math.max(0, Math.round((v - r.paso) * 10) / 10)); pintar(); },
     rge: function (el) { var k = el.dataset.k, v = +el.dataset.v; setReg(H.hoy(), k, regVal(H.hoy(), k) === v ? null : v); pintar(); },
@@ -772,6 +819,8 @@
   });
   document.addEventListener("input", function (e) { if (e.target.id === "qa-t") parseQA(true); });
   document.addEventListener("change", function (e) {
+    if (e.target.id === "he-pl" && e.target.value) aplicarPlantilla(e.target.value);
+    if (e.target.id === "me-ii" || e.target.id === "me-ia") { leerME(); pintarME(); if (S.me.idi && !$("#me-n").value.trim()) { $("#me-n").value = (S.me.idi.a === "a1" ? "Terminar el nivel A1 de " : "Unidad " + S.me.idi.a.slice(4) + " de ") + IDI_NOM[S.me.idi.i]; } syncIdiomas(true); }
     if (e.target.id === "dh-t") setDia(H.hoy(), null, e.target.value);
     if (/^g-[0-2]$/.test(e.target.id)) { var dg = dDoc(H.hoy()); dg.g = dg.g || ["", "", ""]; dg.g[+e.target.id.slice(2)] = e.target.value.trim(); guardarDia(dg); }
     if (e.target.id === "pm-t") { var dp = dDoc(H.hoy()); dp.man = e.target.value.trim(); guardarDia(dp); if (dp.man) toast("Plan de mañana guardado"); }
@@ -794,8 +843,8 @@
     var vacio = !db.sync.ult && !Object.keys(db.habitos).length && !Object.keys(db.tareas).length; if (vacio && cfg().token) S.cargando = true;
     pintarTabs(); pintar();
     window.HB_DEBUG = { db: function () { return db; }, S: S, A: A, pintar: pintar, revisar: revisar, setEv: function (e) { S.ev = e; pintar(); } };
-    sync(false).then(function () { S.cargando = false; pintar(); cargarEv(H.hoy(), H.addD(H.hoy(), 1)); syncGym(); revisar(); buscarActualizacion(); cargarEv(H.addD(H.hoy(), 2), H.addD(H.hoy(), 30)); });
-    S.enf = enfLeer(); chipEnf(); setInterval(tickEnf, 1000);
+    sync(false).then(function () { S.cargando = false; pintar(); cargarEv(H.hoy(), H.addD(H.hoy(), 1)); syncGym(); syncIdiomas(); revisar(); buscarActualizacion(); cargarEv(H.addD(H.hoy(), 2), H.addD(H.hoy(), 30)); });
+    S.enf = enfLeer(); try { S.idiRes = JSON.parse(LS.getItem("hb_idi") || "null"); } catch (e) { S.idiRes = null; } chipEnf(); setInterval(tickEnf, 1000);
     setInterval(function () { if (!document.hidden) { var h = H.hoy(); if (S.lastDay && S.lastDay !== h) { S.dia = h; pintar(); } S.lastDay = h; revisar(); } }, 30000); S.lastDay = H.hoy();
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
   }

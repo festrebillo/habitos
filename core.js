@@ -54,7 +54,8 @@
     { n: "Estudiar", e: "🎓", tipo: "cant", meta: 30, un: "min", frec: { t: "dias", dias: [1, 2, 3, 4, 5] } }, { n: "Caminar", e: "🚶", tipo: "cant", meta: 6000, un: "pasos", frec: { t: "dia" } },
     { n: "Entrenar", e: "🏋️", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 4 } }, { n: "Dormir temprano", e: "😴", tipo: "check", meta: 1, un: "", frec: { t: "dia" } },
     { n: "Escribir en el diario", e: "✍️", tipo: "check", meta: 1, un: "", frec: { t: "dia" } }, { n: "Sin redes sociales", e: "📵", tipo: "check", meta: 1, un: "", frec: { t: "dia" } },
-    { n: "Ir al gym", e: "💪", tipo: "gym", meta: 1, un: "", frec: { t: "sem", n: 4 } }
+    { n: "Ir al gym", e: "💪", tipo: "gym", meta: 1, un: "", frec: { t: "sem", n: 4 } },
+    { n: "Estudiar un idioma", e: "🗣️", tipo: "idioma", meta: 1, un: "", frec: { t: "dia" } }
   ];
   /* Ideas de hábitos que practican muchos emprendedores, deportistas y líderes (c = categoría, d = para qué sirve) */
   var IDEAS = [
@@ -80,7 +81,7 @@
     { c: "Noche", n: "Preparar el día de mañana", e: "📝", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Dormir tranquilo y arrancar sin dudas" },
     { c: "Noche", n: "Apagar pantallas antes de dormir", e: "🌙", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Una hora sin pantallas para dormir mejor" },
     { c: "Noche", n: "Dormir 7 a 8 horas", e: "😴", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "La base de todo lo demás" },
-    { c: "Aprendizaje", n: "Estudiar un idioma (una lección)", e: "🗣️", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Constancia diaria: poco, pero todos los días" },
+    { c: "Aprendizaje", n: "Estudiar un idioma (una lección)", e: "🗣️", tipo: "idioma", meta: 1, un: "", frec: { t: "dia" }, d: "Se marca solo al completar una lección en tu app Idiomas" },
     { c: "Aprendizaje", n: "Escuchar un podcast educativo", e: "🎧", tipo: "cant", meta: 20, un: "min", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Aprender mientras te mueves o cocinas" },
     { c: "Aprendizaje", n: "Practicar un instrumento o habilidad", e: "🎸", tipo: "cant", meta: 20, un: "min", frec: { t: "sem", n: 5 }, d: "La práctica corta y frecuente gana a la larga" },
     { c: "Aprendizaje", n: "Leer noticias de mi sector", e: "📰", tipo: "cant", meta: 10, un: "min", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Estar al día sin perder la mañana" },
@@ -94,7 +95,28 @@
     { c: "Bienestar", n: "Limitar redes a 30 minutos", e: "📵", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Recuperar tiempo para lo importante" },
     { c: "Finanzas", n: "Anotar mis gastos del día", e: "🧾", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Saber a dónde va tu dinero" },
     { c: "Finanzas", n: "Ahorrar antes de gastar", e: "🏦", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 1 }, d: "Pagarte primero a ti" },
-    { c: "Finanzas", n: "Revisión mensual de metas", e: "📆", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 1 }, d: "Ajustar el rumbo con tiempo" }
+    { c: "Finanzas", n: "Revisión mensual de metas", e: "📆", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 1 }, d: "Ajustar el rumbo con tiempo" },
+    { c: "Finanzas", n: "Revisar mis gastos de la semana", e: "🧮", tipo: "check", meta: 1, un: "", frec: { t: "dias", dias: [7] }, d: "Cinco minutos para ver a dónde se fue el dinero" },
+    { c: "Aprendizaje", n: "Ver una clase corta en línea", e: "🎓", tipo: "cant", meta: 20, un: "min", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Una habilidad nueva en pequeñas dosis" },
+    { c: "Aprendizaje", n: "Repasar mis apuntes", e: "🗒️", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 3 }, d: "Lo repasado a tiempo no se olvida" },
+    { c: "Aprendizaje", n: "Resolver un acertijo o problema", e: "🧩", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Mantiene la mente ágil" },
+    { c: "Creatividad", n: "Dibujar o crear algo", e: "🎨", tipo: "cant", meta: 15, un: "min", frec: { t: "sem", n: 4 }, d: "Crear sin presión, solo por gusto" },
+    { c: "Creatividad", n: "Escribir una página libre", e: "✍️", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Vaciar la cabeza antes de empezar el día" },
+    { c: "Creatividad", n: "Escuchar música nueva", e: "🎧", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 3 }, d: "Salir de los mismos temas de siempre" },
+    { c: "Creatividad", n: "Fotografiar algo bonito", e: "📷", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 3 }, d: "Entrena la mirada y la gratitud" },
+    { c: "Hogar", n: "Ordenar 10 minutos", e: "🧹", tipo: "cant", meta: 10, un: "min", frec: { t: "dia" }, d: "Un hogar ordenado ordena la cabeza" },
+    { c: "Hogar", n: "Lavar los platos al terminar", e: "🍽️", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Evita acumular tareas" },
+    { c: "Hogar", n: "Preparar mi comida de mañana", e: "🥡", tipo: "check", meta: 1, un: "", frec: { t: "dias", dias: [1, 2, 3, 4, 7] }, d: "Comer mejor y ahorrar tiempo" },
+    { c: "Hogar", n: "Regar las plantas", e: "🪴", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 3 }, d: "Cuidar algo vivo" },
+    { c: "Cuerpo", n: "Tomar mis vitaminas o medicinas", e: "💊", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Que no se te pase" },
+    { c: "Cuerpo", n: "Caminar 10 minutos después de comer", e: "🚶", tipo: "cant", meta: 10, un: "min", frec: { t: "dia" }, d: "Ayuda a la digestión y a la energía" },
+    { c: "Cuerpo", n: "Cuidar mi postura", e: "🧍", tipo: "cant", meta: 3, un: "revisiones", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Menos dolor de espalda y cuello" },
+    { c: "Cuerpo", n: "Cenar liviano", e: "🥣", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Dormir mejor" },
+    { c: "Cuerpo", n: "Cepillado y seda dental", e: "🦷", tipo: "check", meta: 1, un: "", frec: { t: "dia" }, d: "Un hábito pequeño que se agradece años después" },
+    { c: "Relaciones", n: "Tiempo de calidad con mi familia o pareja", e: "❤️", tipo: "cant", meta: 30, un: "min", frec: { t: "dia" }, d: "Presencia real, sin celular" },
+    { c: "Relaciones", n: "Hacer una buena acción", e: "🤲", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 3 }, d: "Ayudar también te hace bien a ti" },
+    { c: "Trabajo", n: "Bandeja de entrada a cero", e: "📥", tipo: "check", meta: 1, un: "", frec: { t: "dias", dias: [1, 2, 3, 4, 5] }, d: "Sin correos pendientes que te pesen" },
+    { c: "Trabajo", n: "Aprender una herramienta o atajo nuevo", e: "⌨️", tipo: "check", meta: 1, un: "", frec: { t: "sem", n: 2 }, d: "Pequeñas mejoras que se acumulan" }
   ];
   function mejorRacha(h, db, hasta) {   // la racha más larga de toda la historia del hábito
     var ini = h.ini || hasta, best = 0, cur = 0, t = h.frec && h.frec.t || "dia", d, g = 0;
